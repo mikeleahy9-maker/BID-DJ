@@ -24,8 +24,10 @@ export async function GET() {
           "Missing Supabase environment variables. Check Vercel Environment Variables settings.",
           "Server health check failed - configuration issue",
           {
-            hasUrl: !!supabaseUrl,
-            hasKey: !!supabaseKey,
+            hasUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
+            hasKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+            // hasUrl: !!supabaseUrl,
+            // hasKey: !!supabaseKey,
             environment: process.env.NODE_ENV,
           }
         ),
