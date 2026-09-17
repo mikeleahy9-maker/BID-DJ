@@ -74,7 +74,10 @@ export async function hasRole(role: AppRole): Promise<boolean> {
  */
 export async function hasAnyRole(roles: AppRole[]): Promise<boolean> {
   const user = await getCurrentAuthUser();
-  return user ? roles.includes(user.role || "") : false;
+  if (!user || !user.role) {
+    return false;
+  }
+  return roles.includes(user.role as AppRole);
 }
 
 /**
@@ -107,7 +110,10 @@ export async function requireRole(role: AppRole): Promise<AuthUser> {
  */
 export async function requireAnyRole(roles: AppRole[]): Promise<AuthUser> {
   const user = await requireAuth();
-  if (!roles.includes(user.role || "")) {
+  if (!user.role) {
+    throw new Error(`Unauthorized: User must have one of: ${roles.join(", ")}`);
+  }
+  if (!roles.includes(user.role as AppRole)) {
     throw new Error(`Unauthorized: User must have one of: ${roles.join(", ")}`);
   }
   return user;
