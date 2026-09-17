@@ -10,8 +10,8 @@ import { NextResponse } from "next/server";
 export async function GET() {
   try {
     // Debug: Check if env vars are available
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseKey = process.env.SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
       console.error("Missing Supabase environment variables", {
@@ -24,8 +24,8 @@ export async function GET() {
           "Missing Supabase environment variables. Check Vercel Environment Variables settings.",
           "Server health check failed - configuration issue",
           {
-            hasUrl: process.env.NEXT_PUBLIC_SUPABASE_URL,
-            hasKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+            hasUrl: process.env.SUPABASE_URL,
+            hasKey: process.env.SUPABASE_ANON_KEY,
             // hasUrl: !!supabaseUrl,
             // hasKey: !!supabaseKey,
             environment: process.env.NODE_ENV,
