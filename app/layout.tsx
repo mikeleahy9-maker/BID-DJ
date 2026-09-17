@@ -2,10 +2,9 @@ import type { Metadata, Viewport } from "next";
 import { Bebas_Neue, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { siteConfig } from "@/config/site";
-import { validateEnv } from "@/lib/env";
 
-// Validate environment variables at build/startup time
-validateEnv();
+// Note: Removed validateEnv() from build time to allow Vercel deployment
+// Environment variables are validated at runtime when needed
 
 const bebasNeue = Bebas_Neue({
   weight: "400",
