@@ -35,14 +35,15 @@ export function validateEnv(): void {
 /**
  * Safely get a required environment variable.
  * Use this for accessing environment variables in server code.
+ * For NEXT_PUBLIC_* variables, they should be set in Vercel Environment Variables.
  */
 export function getEnv(key: string): string {
   const value = process.env[key];
   if (!value) {
-    throw new Error(
-      `Environment variable ${key} is not set. ` +
-      `Please set it in your environment or .env.local file.`
-    );
+    const errorMsg = key.startsWith('NEXT_PUBLIC_')
+      ? `${key} is not set. Set it in Vercel Dashboard → Settings → Environment Variables`
+      : `${key} is not set. Please set it in your environment or .env.local file.`;
+    throw new Error(errorMsg);
   }
   return value;
 }

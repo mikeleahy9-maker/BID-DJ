@@ -9,6 +9,28 @@ import { NextResponse } from "next/server";
 
 export async function GET() {
   try {
+    // Debug: Check if env vars are available
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error(
+        "Missing Supabase environment variables",
+        { 
+          hasUrl: !!supabaseUrl,
+          hasKey: !!supabaseKey,
+          environment: process.env.NODE_ENV
+        }
+      );
+      return NextResponse.json(
+        apiError(
+          "Missing Supabase environment variables. Check Vercel Environment Variables settings.",
+          "Server health check failed - configuration issue"
+        ),
+        { status: 503 }
+      );
+    }
+
     // Check Supabase connection
     const supabase = await getSupabaseServerClient();
     const { error } = await supabase.from("profiles").select("id").limit(1);
