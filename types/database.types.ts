@@ -51,11 +51,11 @@ export type Database = {
         Relationships: [];
       };
     };
-    Views: {};
-    Functions: {};
+    Views: Record<string, never>;
+    Functions: Record<string, never>;
     Enums: {
       user_role: "guest" | "dj_owner" | "dj_helper";
     };
-    CompositeTypes: {};
+    CompositeTypes: Record<string, never>;
   };
 };

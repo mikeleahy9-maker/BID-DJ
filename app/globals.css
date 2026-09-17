@@ -1,104 +1,50 @@
 /**
- * Global styles for BidaBeat.
- * Tailwind CSS v4 with custom theme configuration.
+ * BidaBeat global styles.
+ *
+ * Design tokens extracted from the prototype (bidabeat_8 (2).html).
+ * Components use Tailwind utilities generated from these tokens —
+ * never raw hex values — so a rebrand is a single-file edit.
  */
 
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-  
-  /* Brand colors */
-  --brand-purple: #a855f7;
-  --brand-purple-dark: #7e22ce;
+/* ---------------------------------------------------------------------------
+ * DESIGN TOKENS
+ * Generates utilities like bg-surface, text-neon, border-edge, font-display.
+ * ------------------------------------------------------------------------- */
+@theme {
+  /* Surfaces */
+  --color-bg: #080808;
+  --color-surface: #111111;
+  --color-surface-2: #1a1a1a;
+  --color-edge: #2a2a2a;
+
+  /* Brand neon accents */
+  --color-neon: #00ffe1; /* teal — primary action */
+  --color-neon-2: #ff2d78; /* pink — money, dangers, guest */
+  --color-neon-3: #ffe600; /* yellow — DJ / helper / top song */
+
+  /* Text */
+  --color-foreground: #f0f0f0;
+  --color-muted: #666666;
+
+  /* Extended accents */
+  --color-accent: #a855f7; /* purple — create account, donate */
+
+  /* Fonts (wired to next/font in app/layout.tsx) */
+  --font-sans: var(--dm-sans-var), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--bebas-neue-var), "Bebas Neue", sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-/* Smooth scroll behavior */
-html {
-  scroll-behavior: smooth;
-}
-
-/* Selection color */
-::selection {
-  background-color: var(--brand-purple);
-  color: white;
-}
-
-/* Focus visible for accessibility */
-:focus-visible {
-  outline: 2px solid var(--brand-purple);
-  outline-offset: 2px;
-}
-
-/* Scrollbar styling (optional - can be customized per OS) */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #ccc;
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #999;
-}
-
-/* Dark mode scrollbar */
-@media (prefers-color-scheme: dark) {
-  ::-webkit-scrollbar-thumb {
-    background: #555;
+/* Global dark color scheme + themed selection */
+@layer base {
+  html {
+    color-scheme: dark;
   }
 
-  ::-webkit-scrollbar-thumb:hover {
-    background: #777;
-  }
-}
-
-/* Utility classes for common patterns */
-.container-safe {
-  width: 100%;
-  max-width: 1280px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-/* Responsive text sizing */
-@media (max-width: 640px) {
-  h1 {
-    font-size: 1.875rem;
-  }
-
-  h2 {
-    font-size: 1.5rem;
+  ::selection {
+    background-color: var(--color-neon);
+    color: var(--color-bg);
   }
 }

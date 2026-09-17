@@ -1,20 +1,19 @@
-/**
- * Signup page placeholder.
- * To be implemented later with Supabase authentication.
- */
+import Link from "next/link";
+import { AuthScreen } from "@/features/auth/components/auth-screen";
+import SignupForm from "@/features/auth/components/signup-form";
 
-import { Card, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+export const metadata = { title: "Create Account" };
 
 export default function SignupPage() {
   return (
-    <Card>
-      <CardTitle>Create Account</CardTitle>
-      <CardDescription>Sign up to start using BidaBeat</CardDescription>
-      <CardContent className="mt-6">
-        <p className="text-gray-600 dark:text-gray-400">
-          Signup implementation coming soon.
-        </p>
-      </CardContent>
-    </Card>
+    <AuthScreen title="Create Account" subtitle="Save your card once — use at any event">
+      <SignupForm />
+      <p className="text-center text-[13px] text-muted">
+        Already have an account?{" "}
+        <Link href="/login" className="font-semibold text-neon underline">
+          Log in →
+        </Link>
+      </p>
+    </AuthScreen>
   );
 }

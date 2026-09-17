@@ -19,7 +19,7 @@ export const metadata = {
 export default function GuestLayout({ children }: LayoutProps) {
   return (
     <>
-      <AppHeader navItems={siteConfig.guest.nav as any} />
+      <AppHeader navItems={siteConfig.guest.nav} />
       <main className="flex-1">{children}</main>
     </>
   );

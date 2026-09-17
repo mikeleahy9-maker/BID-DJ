@@ -1,20 +1,19 @@
-/**
- * Login page placeholder.
- * To be implemented later with Supabase authentication.
- */
+import Link from "next/link";
+import { AuthScreen } from "@/features/auth/components/auth-screen";
+import LoginForm from "@/features/auth/components/login-form";
 
-import { Card, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
+export const metadata = { title: "Log In" };
 
 export default function LoginPage() {
   return (
-    <Card>
-      <CardTitle>Sign In</CardTitle>
-      <CardDescription>Sign in to your BidaBeat account</CardDescription>
-      <CardContent className="mt-6">
-        <p className="text-gray-600 dark:text-gray-400">
-          Login implementation coming soon.
-        </p>
-      </CardContent>
-    </Card>
+    <AuthScreen title="Welcome Back" subtitle="Log in — then find tonight's event">
+      <LoginForm />
+      <p className="text-center text-[13px] text-muted">
+        Don&apos;t have an account?{" "}
+        <Link href="/signup" className="font-semibold text-neon underline">
+          Create one →
+        </Link>
+      </p>
+    </AuthScreen>
   );
 }

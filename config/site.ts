@@ -5,7 +5,7 @@
 
 export const siteConfig = {
   name: "BidaBeat",
-  description: "The platform for live music requests and tipping",
+  description: "Bid the Beat. Own the Night. A crowd-funded jukebox for live events — guests request songs and bid to move them up the queue.",
   url: process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000",
 
   // Metadata
