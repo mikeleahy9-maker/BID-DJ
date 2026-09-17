@@ -14,18 +14,20 @@ export async function GET() {
     const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error(
-        "Missing Supabase environment variables",
-        { 
-          hasUrl: !!supabaseUrl,
-          hasKey: !!supabaseKey,
-          environment: process.env.NODE_ENV
-        }
-      );
+      console.error("Missing Supabase environment variables", {
+        hasUrl: !!supabaseUrl,
+        hasKey: !!supabaseKey,
+        environment: process.env.NODE_ENV,
+      });
       return NextResponse.json(
         apiError(
           "Missing Supabase environment variables. Check Vercel Environment Variables settings.",
-          "Server health check failed - configuration issue"
+          "Server health check failed - configuration issue",
+          {
+            hasUrl: !!supabaseUrl,
+            hasKey: !!supabaseKey,
+            environment: process.env.NODE_ENV,
+          }
         ),
         { status: 503 }
       );

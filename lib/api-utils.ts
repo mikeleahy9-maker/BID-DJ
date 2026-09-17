@@ -8,6 +8,7 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   message?: string;
+  meta?: ApiErrorMeta;
 }
 
 export function apiSuccess<T>(data: T, message?: string): ApiResponse<T> {
@@ -18,10 +19,19 @@ export function apiSuccess<T>(data: T, message?: string): ApiResponse<T> {
   };
 }
 
-export function apiError(error: string, message?: string): ApiResponse<null> {
+export interface ApiErrorMeta {
+  [key: string]: unknown;
+}
+
+export function apiError(
+  error: string,
+  message?: string,
+  meta?: ApiErrorMeta
+): ApiResponse<null> {
   return {
     success: false,
     error,
     message: message || error,
+    ...(meta ? { meta } : {}),
   };
 }
