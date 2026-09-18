@@ -17,10 +17,8 @@ export async function getSupabaseServerClient() {
   const cookieStore = await cookies();
 
   return createServerClient(
-    getEnv('SUPABASE_URL'),
-    getEnv('SUPABASE_ANON_KEY'),
-    // getEnv('NEXT_PUBLIC_SUPABASE_URL'),
-    // getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'),
+    getEnv('NEXT_PUBLIC_SUPABASE_URL'),
+    getEnv('NEXT_PUBLIC_SUPABASE_ANON_KEY'),
     {
       cookies: {
         getAll() {
