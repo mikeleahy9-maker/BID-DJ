@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
 
-export default function DJDashboardRedirect() {
+export default function DJIndexRedirect() {
   redirect("/dj/events");
 }

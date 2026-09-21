@@ -62,13 +62,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
       suppressHydrationWarning
     >
       <body className="min-h-screen overflow-x-hidden bg-bg font-sans text-foreground">
-        <div className="mx-auto min-h-screen w-full max-w-[480px] bg-bg">
-          {children}
-        </div>
-        <div
-          aria-hidden
-          className="pointer-events-none fixed inset-0 z-[9999] bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(0,255,225,0.012)_2px,rgba(0,255,225,0.012)_4px)]"
-        />
+        {children}
       </body>
     </html>
   );

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { AuthScreen } from "@/features/auth/components/auth-screen";
 import DJSignupForm from "@/features/auth/components/dj-signup-form";
 
@@ -10,7 +11,9 @@ export default function DJSignupPage() {
       title="Create DJ/Band Account"
       subtitle="One-time $50 activation fee — your account, your events, forever"
     >
-      <DJSignupForm />
+      <Suspense>
+        <DJSignupForm />
+      </Suspense>
     </AuthScreen>
   );
 }

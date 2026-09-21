@@ -1,20 +1,22 @@
 /**
- * Authentication route group layout.
- * Auth pages render their own shell (AuthScreen). This layout only
- * provides the scroll container inside the app frame.
+ * Auth route group layout.
+ * Preserves the prototype's mobile-first 480px frame for auth screens.
  */
 
 import React from "react";
 
-interface LayoutProps {
+export default function AuthLayout({
+  children,
+}: {
   children: React.ReactNode;
-}
-
-export const metadata = {
-  title: "BidaBeat — Sign In",
-  description: "Sign in to your BidaBeat account",
-};
-
-export default function AuthLayout({ children }: LayoutProps) {
-  return <main className="min-h-screen flex-1">{children}</main>;
+}) {
+  return (
+    <div className="relative mx-auto min-h-screen w-full max-w-[480px] bg-bg">
+      {children}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-[9999] bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(0,255,225,0.012)_2px,rgba(0,255,225,0.012)_4px)]"
+      />
+    </div>
+  );
 }

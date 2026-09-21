@@ -48,20 +48,20 @@ export const siteConfig = {
   dj: {
     nav: [
       {
-        title: "Dashboard",
-        href: "/dj/dashboard",
-      },
-      {
-        title: "Events",
+        title: "Gigs",
         href: "/dj/events",
       },
       {
-        title: "Queue",
+        title: "Live Queue",
         href: "/dj/queue",
       },
       {
         title: "Earnings",
         href: "/dj/earnings",
+      },
+      {
+        title: "Settings",
+        href: "/dj/settings",
       },
     ],
   },

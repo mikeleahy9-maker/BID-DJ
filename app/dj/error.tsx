@@ -23,8 +23,8 @@ export default function DJError({ error, reset }: ErrorProps) {
           <Button variant="primary" onClick={reset}>
             Try again
           </Button>
-          <Link href="/dj/dashboard">
-            <Button variant="outline">Go to Dashboard</Button>
+          <Link href="/dj/events">
+            <Button variant="outline">Go to Gigs</Button>
           </Link>
         </div>
       </div>

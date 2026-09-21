@@ -1,23 +1,22 @@
 /**
  * Marketing route group layout.
- * Used for public landing and marketing pages.
+ * Preserves the prototype's mobile-first 480px frame for landing/auth screens.
  */
 
 import React from "react";
 
-export const metadata = {
-  title: "BidaBeat - Live Music Requests & Tipping Platform",
-  description: "The platform for live music requests and tipping",
-};
-
-interface LayoutProps {
+export default function MarketingLayout({
+  children,
+}: {
   children: React.ReactNode;
-}
-
-export default function MarketingLayout({ children }: LayoutProps) {
+}) {
   return (
-    <>
-      <main className="flex-1">{children}</main>
-    </>
+    <div className="relative mx-auto min-h-screen w-full max-w-[480px] bg-bg">
+      {children}
+      <div
+        aria-hidden
+        className="pointer-events-none fixed inset-0 z-[9999] bg-[repeating-linear-gradient(0deg,transparent,transparent_2px,rgba(0,255,225,0.012)_2px,rgba(0,255,225,0.012)_4px)]"
+      />
+    </div>
   );
 }

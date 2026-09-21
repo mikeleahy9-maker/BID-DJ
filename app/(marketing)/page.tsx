@@ -79,7 +79,7 @@ export default function HomePage() {
             </span>
           </Link>
 
-          <Link
+          {/* <Link
             href="/guest"
             className={`${authBtnBase} border-neon-2/30 bg-neon-2/5`}
           >
@@ -95,7 +95,7 @@ export default function HomePage() {
             <span className="ml-auto text-[18px] text-muted" aria-hidden>
               →
             </span>
-          </Link>
+          </Link> */}
         </div>
 
         <Link
@@ -120,13 +120,13 @@ export default function HomePage() {
           </span>
         </Link>
 
-        <p className="max-w-[320px] rounded-lg border border-edge bg-surface px-3.5 py-2.5 text-center text-[11px] leading-[1.7] text-muted">
+        {/* <p className="max-w-[320px] rounded-lg border border-edge bg-surface px-3.5 py-2.5 text-center text-[11px] leading-[1.7] text-muted">
           <strong className="text-neon">Demo:</strong> any guest login works ·
           event code <strong className="text-neon">LOFT22</strong>
           <br />
           DJ email <strong className="text-neon-3">dj@demo.com</strong> / pass{" "}
           <strong className="text-neon-3">any</strong>
-        </p>
+        </p> */}
       </div>
     </section>
   );

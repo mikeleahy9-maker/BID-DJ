@@ -1,36 +1,160 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Field, FieldRow, Input } from "@/components/ui/input";
 import { useToast } from "./use-toast";
+import { getSupabaseClient } from "@/lib/supabase/client";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function validateEmail(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return EMAIL_RE.test(trimmed) ? null : "Please enter a valid email address (e.g. you@email.com).";
+}
 
 /**
- * DJ / Band signup form with the $50 activation flow.
- * Faithful port of screen-dj-signup. Stripe will own the payment once integrated.
+ * DJ / Band signup with the $50 activation flow.
+ *
+ * 1. Creates the Supabase auth user (profile row with role='dj' is created
+ *    by the `on_auth_user_created` DB trigger).
+ * 2. Redirects to Stripe-hosted Checkout to collect the one-time $50 fee.
+ * 3. The Stripe webhook marks the account activated once payment succeeds.
+ *
+ * Email confirmation is enabled, so the DJ verifies their email before the
+ * first sign-in; the fee can be paid right after registration either way.
  */
 
 export default function DJSignupForm() {
+  const { toastNode } = useToast();
+  const searchParams = useSearchParams();
+  const canceled = searchParams.get("payment") === "canceled";
+
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [actName, setActName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [city, setCity] = useState("");
-  const [card, setCard] = useState("");
-  const [expiry, setExpiry] = useState("");
-  const [cvv, setCvv] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const { show, toastNode } = useToast();
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const [emailTaken, setEmailTaken] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const checkEmailExists = async (value: string) => {
+    const trimmed = value.trim();
+    if (!EMAIL_RE.test(trimmed)) return;
+    try {
+      const res = await fetch("/api/auth/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: trimmed }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json.exists) {
+        setEmailTaken(true);
+        setEmailError("This email is already registered. Please use a different one.");
+      } else {
+        setEmailTaken(false);
+        setEmailError(null);
+      }
+    } catch {
+      // Best-effort check; signUp still rejects duplicates at submit time.
+    }
+  };
+
+  const handleEmailChange = (value: string) => {
+    setEmail(value);
+    setEmailError(null);
+    setEmailTaken(false);
+  };
+
+  const handleEmailBlur = () => {
+    const formatError = validateEmail(email);
+    if (formatError) {
+      setEmailError(formatError);
+      return;
+    }
+    if (!email.trim()) {
+      setEmailError(null);
+      return;
+    }
+    checkEmailExists(email);
+  };
+
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setError(null);
+
     if (!firstName.trim() || !lastName.trim() || !actName.trim() || !email.trim()) {
       setError("Please fill in the required account fields.");
       return;
     }
-    setError(null);
-    show("✓ Account activated! $50 charged — welcome aboard");
+    const formatError = validateEmail(email);
+    if (formatError) {
+      setEmailError(formatError);
+      setError(null);
+      return;
+    }
+    if (emailTaken) {
+      setError("This email is already registered. Please use a different one.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          data: {
+            role: "dj",
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            act_name: actName.trim(),
+            city: city.trim(),
+          },
+        },
+      });
+
+      if (signUpError) throw signUpError;
+      const userId = data.user?.id;
+      if (!userId) throw new Error("Signup did not return a user.");
+
+      // Redirect to Stripe Checkout for the $50 activation fee.
+      const checkout = await fetch("/api/checkout/dj-fee", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const checkoutJson = await checkout.json().catch(() => ({}));
+      if (!checkout.ok || !checkoutJson.url) {
+        throw new Error(checkoutJson.error ?? "Could not start payment.");
+      }
+      window.location.href = checkoutJson.url;
+    } catch (err) {
+      const message =
+        err instanceof Error && /already registered|already been registered/i.test(err.message)
+          ? "This email is already registered. Please use a different one."
+          : err instanceof Error
+            ? err.message
+            : "Signup failed. Please try again.";
+      setError(message);
+      setSubmitting(false);
+    }
   };
+
+  const canSubmit =
+    !submitting &&
+    Boolean(firstName.trim() && lastName.trim() && actName.trim() && email.trim() && password.trim()) &&
+    EMAIL_RE.test(email.trim());
 
   return (
     <>
@@ -81,18 +205,60 @@ export default function DJSignupForm() {
             placeholder="you@email.com"
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => handleEmailChange(e.target.value)}
+            onBlur={handleEmailBlur}
           />
+          {emailError && <p className="text-xs text-neon-2">{emailError}</p>}
         </Field>
 
         <Field label="Password">
-          <Input
-            type="password"
-            placeholder="Choose a strong password"
-            autoComplete="new-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <div className="relative">
+            <Input
+              type={showPassword ? "text" : "password"}
+              placeholder="Choose a strong password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full pr-10"
+            />
+            <button
+              type="button"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              onClick={() => setShowPassword((s) => !s)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer rounded p-1 text-muted transition hover:text-neon-3"
+            >
+              {showPassword ? (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                  <line x1="1" y1="1" x2="23" y2="23" />
+                </svg>
+              ) : (
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              )}
+            </button>
+          </div>
         </Field>
 
         <Field label="City / Market">
@@ -103,54 +269,33 @@ export default function DJSignupForm() {
           />
         </Field>
 
-        <div className="my-5 h-px bg-edge" />
+        <div className="my-2 h-px bg-edge" />
 
-        <div className="font-display text-base tracking-[1.5px] text-neon-3">
-          Activation Payment
+        <div className="flex items-start gap-3 rounded-lg bg-surface-2 p-3.5">
+          <span className="text-xl" aria-hidden>💳</span>
+          <div>
+            <div className="text-[13px] font-semibold">Pay your $50 activation on the next screen</div>
+            <div className="mt-0.5 text-[11px] leading-[1.6] text-muted">
+              After signup you&apos;ll be taken to Stripe&apos;s secure checkout to pay the
+              one-time fee. Your account activates instantly once payment clears.
+            </div>
+          </div>
         </div>
 
-        <Field label="Card Number">
-          <Input
-            placeholder="•••• •••• •••• ••••"
-            autoComplete="cc-number"
-            value={card}
-            onChange={(e) => setCard(e.target.value)}
-          />
-        </Field>
-
-        <FieldRow>
-          <Field label="Expiry" className="flex-1">
-            <Input
-              placeholder="MM/YY"
-              autoComplete="cc-exp"
-              value={expiry}
-              onChange={(e) => setExpiry(e.target.value)}
-            />
-          </Field>
-          <Field label="CVV" className="flex-1">
-            <Input
-              placeholder="•••"
-              autoComplete="cc-csc"
-              value={cvv}
-              onChange={(e) => setCvv(e.target.value)}
-            />
-          </Field>
-        </FieldRow>
-
-        <p className="mt-2 text-center text-[10px] leading-[1.6] text-muted">
-          $50 charged once at signup · Your card is then saved for payout
-          purposes
-          <br />
-          Processed securely via Stripe · No recurring charges
-        </p>
+        {canceled && (
+          <p className="text-center text-xs text-neon-3">
+            Payment was canceled — your account is not activated yet. Submit again to retry.
+          </p>
+        )}
 
         {error && <p className="text-center text-xs text-neon-2">{error}</p>}
 
         <button
           type="submit"
-          className="mt-1 w-full cursor-pointer rounded-[10px] bg-gradient-to-br from-neon-3 to-[#ff8800] px-4 py-[15px] font-display text-[18px] tracking-[2px] text-bg shadow-[0_0_20px_rgba(255,230,0,0.2)] transition active:scale-[0.99]"
+          disabled={!canSubmit}
+          className="mt-1 w-full cursor-pointer rounded-[10px] bg-gradient-to-br from-neon-3 to-[#ff8800] px-4 py-[15px] font-display text-[18px] tracking-[2px] text-bg shadow-[0_0_20px_rgba(255,230,0,0.2)] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          ACTIVATE ACCOUNT — $50 →
+          {submitting ? "ACTIVATING…" : "ACTIVATE ACCOUNT — $50 →"}
         </button>
       </form>
 

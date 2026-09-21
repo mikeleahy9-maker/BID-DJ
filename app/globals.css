@@ -35,6 +35,18 @@
   --font-sans: var(--dm-sans-var), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, sans-serif;
   --font-display: var(--bebas-neue-var), "Bebas Neue", sans-serif;
+
+  /* Animations */
+  --animate-slide-up: slide-up 0.25s ease;
+
+  @keyframes slide-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
 }
 
 /* Global dark color scheme + themed selection */
