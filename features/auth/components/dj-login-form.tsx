@@ -49,7 +49,7 @@ export default function DJLoginForm() {
 
     setSubmitting(true);
     const supabase = getSupabaseClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
@@ -57,6 +57,27 @@ export default function DJLoginForm() {
     if (signInError) {
       setError(friendlyAuthError(signInError.message));
       setSubmitting(false);
+      return;
+    }
+
+    // DJ login is for DJ/helper accounts only — guests belong on the guest page.
+    const { data: profile } = data.user
+      ? await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .maybeSingle()
+      : { data: null };
+    const role = (profile as { role?: string } | null)?.role;
+
+    if (role !== "dj" && role !== "helper") {
+      await supabase.auth.signOut();
+      setSubmitting(false);
+      setError(
+        role === "guest"
+          ? "DJ account not found."
+          : "This account doesn't have DJ access."
+      );
       return;
     }
 

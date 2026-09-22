@@ -118,8 +118,8 @@ export default function LoginForm() {
     setError(null);
     setSubmitting(true);
 
-    const supabase = getSupabaseClient();
-    const { error: signInError } = await supabase.auth.signInWithPassword({
+const supabase = getSupabaseClient();
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email: email.trim(),
       password,
     });
@@ -127,6 +127,22 @@ export default function LoginForm() {
     if (signInError) {
       setSubmitting(false);
       setError(friendlyAuthError(signInError.message));
+      return;
+    }
+
+    // Guest login is for guest accounts only — DJs belong on the DJ login page.
+    const { data: profile } = data.user
+      ? await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", data.user.id)
+          .maybeSingle()
+      : { data: null };
+    const role = (profile as { role?: string } | null)?.role;
+    if (role === "dj" || role === "helper") {
+      await supabase.auth.signOut();
+      setSubmitting(false);
+      setError("Guest account not found");
       return;
     }
 

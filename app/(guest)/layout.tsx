@@ -4,9 +4,10 @@
  * matching #screen-guest. Exactly one <header> (this one); guest pages
  * should not render their own topbars.
  *
- * Access guard: unauthenticated users are sent to /login, and guests with no
- * saved card are shown the card-save gate instead of any guest page — the
- * dashboard is locked until a payment method exists.
+ * Access guard: unauthenticated users are sent to /login, DJ/helper accounts
+ * are sent to /dj/events, and guests with no saved card are shown the
+ * card-save gate instead of any guest page — the dashboard is locked until a
+ * payment method exists.
  */
 
 import React from "react";
@@ -37,9 +38,16 @@ export default async function GuestLayout({ children }: LayoutProps) {
   const supabase = await getSupabaseServerClient();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("first_name, last_name, stripe_payment_method_id")
+    .select("role, first_name, last_name, stripe_payment_method_id")
     .eq("id", user.id)
     .single();
+
+  // Guests only — DJ/helper accounts are locked out of guest pages
+  // (server-side, so a direct URL can't bypass it).
+  const role = profile?.role;
+  if (role === "dj" || role === "helper") {
+    redirect("/dj/events");
+  }
 
   const name =
     profile?.first_name ||
