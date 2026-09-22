@@ -1,9 +1,10 @@
 /**
- * Join event page placeholder.
- * Guests can join events using event codes.
+ * Join event page.
+ * Guests can join events using event codes — the event landing screen
+ * (port of prototype `#screen-event`).
  */
 
-import { PageContainer } from "@/components/layout/page-container";
+import { GuestEventPage } from "@/features/guest/components/guest-event-page";
 
 interface JoinEventPageProps {
   params: Promise<{
@@ -14,14 +15,5 @@ interface JoinEventPageProps {
 export default async function JoinEventPage({ params }: JoinEventPageProps) {
   const { eventCode } = await params;
 
-  return (
-    <PageContainer>
-      <div className="text-center">
-        <h1 className="mb-4 text-2xl font-bold">Join Event</h1>
-        <p className="text-gray-600 dark:text-gray-400">
-          Event code: {eventCode}
-        </p>
-      </div>
-    </PageContainer>
-  );
+  return <GuestEventPage eventCode={eventCode} />;
 }

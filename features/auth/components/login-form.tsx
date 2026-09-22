@@ -1,15 +1,31 @@
-"use client";
+﻿"use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Field, Input } from "@/components/ui/input";
 import { useToast } from "./use-toast";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 /**
  * Guest login form — faithful port of screen-login from the prototype.
- * Auth wiring will be added when Supabase is connected.
+ * Authenticates against Supabase with signInWithPassword.
  */
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+function friendlyAuthError(message: string): string {
+  const msg = message.toLowerCase();
+  if (msg.includes("invalid login credentials")) {
+    return "Incorrect email or password.";
+  }
+  if (msg.includes("email not confirmed")) {
+    return "Email not confirmed yet — check your inbox for the verification link.";
+  }
+  if (msg.includes("rate limit") || msg.includes("too many requests")) {
+    return "Too many attempts. Wait a minute and try again.";
+  }
+  return "Could not sign in. Please try again.";
+}
 
 function validateEmail(value: string): string | null {
   const trimmed = value.trim();
@@ -18,12 +34,14 @@ function validateEmail(value: string): string | null {
 }
 
 export default function LoginForm() {
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailNotFound, setEmailNotFound] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const { show, toastNode } = useToast();
 
   const checkEmailExists = async (value: string): Promise<boolean | undefined> => {
@@ -70,6 +88,11 @@ export default function LoginForm() {
     checkEmailExists(email);
   };
 
+  const canSubmit =
+    Boolean(email.trim() && password.trim()) &&
+    EMAIL_RE.test(email.trim()) &&
+    !emailNotFound;
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
@@ -93,13 +116,24 @@ export default function LoginForm() {
       return;
     }
     setError(null);
-    show("✓ Logged in! (Supabase auth — coming soon)");
-  };
+    setSubmitting(true);
 
-  const canSubmit =
-    Boolean(email.trim() && password.trim()) &&
-    EMAIL_RE.test(email.trim()) &&
-    !emailNotFound;
+    const supabase = getSupabaseClient();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+
+    if (signInError) {
+      setSubmitting(false);
+      setError(friendlyAuthError(signInError.message));
+      return;
+    }
+
+    show("✓ Logged in! Redirecting…");
+    router.push("/dashboard");
+    router.refresh();
+  };
 
   return (
     <>
@@ -170,18 +204,29 @@ export default function LoginForm() {
 
         <button
           type="submit"
-          disabled={!canSubmit}
+          disabled={!canSubmit || submitting}
           className="mt-1 w-full cursor-pointer rounded-[10px] bg-gradient-to-br from-neon to-[#00c9b1] px-4 py-[15px] font-display text-[18px] tracking-[2px] text-bg shadow-[0_0_20px_rgba(0,255,225,0.2)] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
         >
-          LOG IN →
-        </button>
-
-        <button
-          type="button"
-          className="cursor-pointer border-none bg-transparent text-center text-xs text-muted underline hover:text-neon"
-          onClick={() => show("Password reset email sent! (demo)")}
-        >
-          Forgot password?
+          {submitting ? (
+            <span className="inline-flex items-center justify-center gap-2">
+              <svg
+                className="animate-spin"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="3"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+              LOGGING IN…
+            </span>
+          ) : (
+            <>LOG IN →</>
+          )}
         </button>
       </form>
 
@@ -189,3 +234,4 @@ export default function LoginForm() {
     </>
   );
 }
+
