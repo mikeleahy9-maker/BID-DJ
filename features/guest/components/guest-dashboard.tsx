@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
 import { useToast } from "@/components/ui/use-toast";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { GUEST_HISTORY } from "../data";
 
 /**
@@ -32,6 +33,25 @@ export function GuestDashboard() {
 
   const [eventCode, setEventCode] = useState("");
   const [tried, setTried] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      router.push("/");
+      router.refresh();
+    } catch (err) {
+      show(
+        err instanceof Error
+          ? err.message
+          : "Could not sign out. Please try again."
+      );
+      setSigningOut(false);
+    }
+  };
 
   const joinNow = () => {
     const code = eventCode.trim().toUpperCase();
@@ -251,11 +271,14 @@ export function GuestDashboard() {
               ))}
 
               <button
-                onClick={() => router.push("/")}
-                className="flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left text-[13px] text-neon-2 transition active:bg-surface-2"
+                onClick={handleSignOut}
+                disabled={signingOut}
+                className="flex w-full cursor-pointer items-center gap-3 px-4 py-3.5 text-left text-[13px] text-neon-2 transition active:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span aria-hidden>🚪</span>
-                <span className="flex-1">Log Out</span>
+                <span className="flex-1">
+                  {signingOut ? "Signing out…" : "Log Out"}
+                </span>
                 <span className="ml-auto text-sm text-muted" aria-hidden>
                   →
                 </span>
