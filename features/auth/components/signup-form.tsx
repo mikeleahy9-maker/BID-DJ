@@ -1,34 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { loadStripe } from "@stripe/stripe-js";
-import type {
-  Appearance,
-  Stripe,
-  StripeElements,
-  StripePaymentElement,
-} from "@stripe/stripe-js";
 import { Field, FieldRow, Input } from "@/components/ui/input";
+import { CardSetupForm } from "@/features/payments/card-setup-form";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
-const STRIPE_PK = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-
-const STRIPE_APPEARANCE: Appearance = {
-  theme: "night",
-  variables: {
-    colorPrimary: "#00ffe1",
-    colorBackground: "#111111",
-    colorText: "#f0f0f0",
-    colorTextSecondary: "#666666",
-    colorDanger: "#ff2d78",
-    borderRadius: "8px",
-    spacingUnit: "4px",
-    inputColorBorder: "#2a2a2a",
-    inputFocusColorBorder: "#00ffe1",
-    focusBoxShadow: "0 0 0 1px #00ffe1",
-  },
-};
 
 function validateEmail(value: string): string | null {
   const trimmed = value.trim();
@@ -39,6 +16,7 @@ function validateEmail(value: string): string | null {
 }
 
 export default function SignupForm() {
+  const router = useRouter();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -265,126 +243,13 @@ export default function SignupForm() {
           </button>
         </form>
       ) : clientSecret ? (
-        <CardStep clientSecret={clientSecret} />
+        <CardSetupForm
+          clientSecret={clientSecret}
+          returnUrl={`${window.location.origin}/signup?setup=complete`}
+          onSaved={() => router.push("/login?signup=success")}
+          footer="Your card is saved securely via Stripe. You are only charged when you buy credits."
+        />
       ) : null}
     </>
-  );
-}
-
-function CardStep({ clientSecret }: { clientSecret: string }) {
-  const router = useRouter();
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const stripeRef = useRef<Stripe | null>(null);
-  const elementsRef = useRef<StripeElements | null>(null);
-  const paymentElementRef = useRef<StripePaymentElement | null>(null);
-  const [ready, setReady] = useState(false);
-  const [processing, setProcessing] = useState(false);
-  const [cardError, setCardError] = useState<string | null>(null);
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function setup() {
-      setReady(false);
-      try {
-        if (!STRIPE_PK) {
-          setCardError("Stripe isn't configured. Please try again later.");
-          return;
-        }
-        const stripe = await loadStripe(STRIPE_PK);
-        if (!stripe || cancelled) return;
-        const elements = stripe.elements({
-          clientSecret,
-          appearance: STRIPE_APPEARANCE,
-        });
-        const paymentElement = elements.create("payment");
-        stripeRef.current = stripe;
-        elementsRef.current = elements;
-        paymentElementRef.current = paymentElement;
-        if (containerRef.current) {
-          paymentElement.mount(containerRef.current);
-        }
-        if (!cancelled) setReady(true);
-      } catch {
-        if (!cancelled) {
-          setCardError("Couldn't load the payment form. Please try again.");
-        }
-      }
-    }
-
-    setup();
-
-    return () => {
-      cancelled = true;
-      if (paymentElementRef.current) {
-        paymentElementRef.current.destroy();
-        paymentElementRef.current = null;
-      }
-      elementsRef.current = null;
-      stripeRef.current = null;
-    };
-  }, [clientSecret, attempt]);
-
-  const handleConfirm = async (e: FormEvent) => {
-    e.preventDefault();
-    const stripe = stripeRef.current;
-    const elements = elementsRef.current;
-    if (!stripe || !elements) return;
-    setProcessing(true);
-    setCardError(null);
-    try {
-      const result = await stripe.confirmSetup({
-        elements,
-        redirect: "if_required",
-        confirmParams: {
-          return_url: `${window.location.origin}/signup?setup=complete`,
-        },
-      });
-      if (result.error) {
-        setCardError(
-          result.error.message ?? "We couldn't save your card. Please try again."
-        );
-        setAttempt((a) => a + 1);
-      } else {
-        router.push("/login?signup=success");
-      }
-    } catch {
-      setCardError("Something went wrong. Please try again.");
-    } finally {
-      setProcessing(false);
-    }
-  };
-
-  return (
-    <form className="mb-3.5 flex flex-col gap-3.5" onSubmit={handleConfirm} noValidate>
-      <div className="my-1 flex items-center gap-3">
-        <span className="h-px flex-1 bg-edge" />
-        <span className="text-[11px] uppercase tracking-[1px] text-muted">
-          Your card
-        </span>
-        <span className="h-px flex-1 bg-edge" />
-      </div>
-
-      <div
-        ref={containerRef}
-        className="rounded-lg border border-edge bg-surface-2 px-[14px] py-[11px]"
-      />
-
-      {cardError && <p className="text-center text-xs text-neon-2">{cardError}</p>}
-
-      <button
-        type="submit"
-        disabled={!ready || processing}
-        className="mt-1 w-full cursor-pointer rounded-[10px] bg-gradient-to-br from-neon to-[#00c9b1] px-4 py-[15px] font-display text-[18px] tracking-[2px] text-bg shadow-[0_0_20px_rgba(0,255,225,0.2)] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {processing ? "SAVING…" : "SAVE CARD →"}
-      </button>
-
-      <p className="mt-2 text-center text-[10px] leading-[1.6] text-muted">
-        Your card is saved securely via Stripe. You are only charged when you buy
-        credits.
-      </p>
-    </form>
   );
 }

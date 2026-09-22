@@ -3,6 +3,10 @@
  * Single topbar: BID-A-BEAT left, guest name chip + Log Out at right end -
  * matching #screen-guest. Exactly one <header> (this one); guest pages
  * should not render their own topbars.
+ *
+ * Access guard: unauthenticated users are sent to /login, and guests with no
+ * saved card are shown the card-save gate instead of any guest page — the
+ * dashboard is locked until a payment method exists.
  */
 
 import React from "react";
@@ -13,6 +17,7 @@ import {
 } from "@/lib/supabase/server";
 import { AppHeader } from "@/components/layout/app-header";
 import { GuestHeaderActions } from "@/features/guest/components/guest-header-actions";
+import { GuestCardGate } from "@/features/guest/components/guest-card-gate";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -32,7 +37,7 @@ export default async function GuestLayout({ children }: LayoutProps) {
   const supabase = await getSupabaseServerClient();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("first_name, last_name")
+    .select("first_name, last_name, stripe_payment_method_id")
     .eq("id", user.id)
     .single();
 
@@ -42,10 +47,12 @@ export default async function GuestLayout({ children }: LayoutProps) {
     (user.email ? user.email.split("@")[0] : "") ||
     "Guest";
 
+  const hasSavedCard = Boolean(profile?.stripe_payment_method_id);
+
   return (
     <>
       <AppHeader navItems={[]} rightSlot={<GuestHeaderActions name={name} />} />
-      <main className="flex-1">{children}</main>
+      <main className="flex-1">{hasSavedCard ? children : <GuestCardGate />}</main>
     </>
   );
 }
