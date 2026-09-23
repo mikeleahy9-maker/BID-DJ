@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Field, Input } from "@/components/ui/input";
 import { useToast } from "./use-toast";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import ForgotPasswordModal from "./forgot-password-modal";
 
 type DJRole = "owner" | "helper";
 
@@ -32,6 +33,7 @@ export default function DJLoginForm() {
   const [role, setRole] = useState<DJRole>("owner");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
 
   const activated = searchParams.get("activated") === "1";
 
@@ -85,18 +87,8 @@ export default function DJLoginForm() {
     router.refresh();
   };
 
-  const handleForgotPassword = async () => {
-    if (!email.trim()) {
-      show("Enter your email above, then click Forgot password.");
-      return;
-    }
-    const supabase = getSupabaseClient();
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim());
-    if (error) {
-      setError(friendlyAuthError(error.message));
-    } else {
-      show("Password reset link sent to your email.");
-    }
+  const handleForgotPassword = () => {
+    setForgotOpen(true);
   };
 
   const roleOpt = (value: DJRole, icon: string, title: string, sub: string) => (
@@ -214,6 +206,8 @@ export default function DJLoginForm() {
           Forgot password?
         </button>
       </form>
+
+      <ForgotPasswordModal open={forgotOpen} onClose={() => setForgotOpen(false)} />
 
       {toastNode}
     </>

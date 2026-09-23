@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Field, Input } from "@/components/ui/input";
 import { useToast } from "./use-toast";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import ForgotPasswordModal from "./forgot-password-modal";
 
 /**
  * Guest login form — faithful port of screen-login from the prototype.
@@ -42,6 +43,7 @@ export default function LoginForm() {
   const [emailError, setEmailError] = useState<string | null>(null);
   const [emailNotFound, setEmailNotFound] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
   const { show, toastNode } = useToast();
 
   const checkEmailExists = async (value: string): Promise<boolean | undefined> => {
@@ -151,6 +153,10 @@ const supabase = getSupabaseClient();
     router.refresh();
   };
 
+  const handleForgotPassword = () => {
+    setForgotOpen(true);
+  };
+
   return (
     <>
       <form className="mb-5 flex flex-col gap-3.5" onSubmit={handleSubmit} noValidate>
@@ -244,8 +250,17 @@ const supabase = getSupabaseClient();
             <>LOG IN →</>
           )}
         </button>
+
+        <button
+          type="button"
+          className="cursor-pointer border-none bg-transparent text-center text-xs text-muted underline hover:text-neon"
+          onClick={handleForgotPassword}
+        >
+          Forgot password?
+        </button>
       </form>
 
+      <ForgotPasswordModal open={forgotOpen} onClose={() => setForgotOpen(false)} />
       {toastNode}
     </>
   );
