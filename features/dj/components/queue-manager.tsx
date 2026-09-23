@@ -25,7 +25,7 @@ interface PlayedLog {
  * and the end-of-event charge flow.
  */
 
-export default function QueueManager() {
+export default function QueueManager({ appUrl }: { appUrl: string }) {
   const { show, toastNode } = useToast();
 
   const [queue, setQueue] = useState<QueueItem[]>(INITIAL_QUEUE);
@@ -370,7 +370,7 @@ export default function QueueManager() {
           <div className="mb-1 font-display text-2xl tracking-[2px]">Join Tonight</div>
           <p className="mb-4 text-xs text-muted">Scan to join the live queue</p>
           <div className="flex justify-center">
-            <QrDisplay value="https://bidabeat.app/join/LOFT22" size={190} />
+            <QrDisplay value={`${appUrl}/join/LOFT22`} size={190} />
           </div>
           <div className="mt-3 font-display text-3xl tracking-[8px] text-neon">LOFT22</div>
           <div className="mt-1 text-xs text-muted">Guest PIN: <b className="text-neon">5678</b> · Helper PIN: <b className="text-neon">9999</b></div>

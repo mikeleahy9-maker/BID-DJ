@@ -1,4 +1,5 @@
 import Stripe from "stripe";
+import { getAppUrl } from "@/lib/app-url";
 
 /**
  * Stripe server-side singleton and BidaBeat fee constants.
@@ -9,10 +10,8 @@ import Stripe from "stripe";
 export const DJ_ACTIVATION_PRICE_ID = "price_1UGzSwSNzy6FSWcqZUTv8Dkh";
 export const DJ_ACTIVATION_FEE_LABEL = "BidaBeat DJ Activation";
 
-/** Public app URL used to build Checkout redirect URLs. */
-export function getAppUrl(): string {
-  return process.env.APP_URL ?? "http://localhost:3000";
-}
+/** Public app URL used to build Stripe redirect URLs (see lib/app-url). */
+export { getAppUrl };
 
 /** Lazy-initialized Stripe client. Throws if the secret key is not configured. */
 export function getStripe(): Stripe {
