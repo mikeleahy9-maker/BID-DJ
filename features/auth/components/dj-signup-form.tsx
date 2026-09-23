@@ -114,6 +114,7 @@ export default function DJSignupForm() {
         email: email.trim(),
         password,
         options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
           data: {
             role: "dj",
             first_name: firstName.trim(),
@@ -283,9 +284,15 @@ export default function DJSignupForm() {
         </div>
 
         {canceled && (
-          <p className="text-center text-xs text-neon-3">
-            Payment was canceled — your account is not activated yet. Submit again to retry.
-          </p>
+          <div className="rounded-lg border border-neon-2/30 bg-neon-2/10 p-3.5 text-center">
+            <p className="text-xs font-semibold text-neon-2">
+              Payment canceled — no charge was made.
+            </p>
+            <p className="mt-1.5 text-[11px] leading-[1.7] text-muted">
+              Your DJ account is already created. Confirm your email, then log in
+              and pay the $50 activation fee from your dashboard to unlock it.
+            </p>
+          </div>
         )}
 
         {error && <p className="text-center text-xs text-neon-2">{error}</p>}

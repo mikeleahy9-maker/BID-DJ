@@ -18,6 +18,13 @@ let supabase: ReturnType<typeof createBrowserClient> | null = null;
 /**
  * Get or create the Supabase browser client.
  * This should be used in client components only.
+ *
+ * NOTE: @supabase/ssr's createBrowserClient hard-codes the PKCE auth flow
+ * (it spreads its own `flowType: "pkce"` after any options we pass), so the
+ * "implicit flow" option is unavailable here. That means email-confirmation
+ * links are PKCE-bound to the browser that created the account — cross-browser
+ * confirmations cannot work. See app/(auth)/auth/callback for how the exchange
+ * is handled.
  */
 export function getSupabaseClient() {
   if (!supabase) {

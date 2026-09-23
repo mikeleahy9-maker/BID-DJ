@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Field, FieldRow, Input } from "@/components/ui/input";
 import { CardSetupForm } from "@/features/payments/card-setup-form";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -246,7 +247,38 @@ export default function SignupForm() {
         <CardSetupForm
           clientSecret={clientSecret}
           returnUrl={`${window.location.origin}/signup?setup=complete`}
-          onSaved={() => router.push("/login?signup=success")}
+          onSaved={async ({ setupIntentId }) => {
+            // Guest accounts are auto-confirmed at signup (email_confirm: true),
+            // so we can sign them in immediately — no manual login.
+            const supabase = getSupabaseClient();
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+              email: email.trim(),
+              password,
+            });
+            if (signInError) {
+              throw new Error(
+                "Your account was created, but automatic sign-in failed. Please log in at the login page."
+              );
+            }
+
+            // Persist the card synchronously so the guest dashboard gate
+            // passes right away (no waiting on the Stripe webhook).
+            const res = await fetch("/api/guest/confirm-card", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ setupIntentId }),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+              throw new Error(
+                (data as { error?: string }).error ??
+                  "Could not save your card. Please try again."
+              );
+            }
+
+            router.push("/dashboard");
+            router.refresh();
+          }}
           footer="Your card is saved securely via Stripe. You are only charged when you buy credits."
         />
       ) : null}

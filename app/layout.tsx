@@ -61,7 +61,10 @@ export default function RootLayout({ children }: RootLayoutProps) {
       className={`${bebasNeue.variable} ${dmSans.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-screen overflow-x-hidden bg-bg font-sans text-foreground">
+      <body
+        className="min-h-screen overflow-x-hidden bg-bg font-sans text-foreground"
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>
