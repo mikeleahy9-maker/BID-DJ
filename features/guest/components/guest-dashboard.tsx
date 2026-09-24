@@ -33,6 +33,7 @@ export function GuestDashboard() {
 
   const [eventCode, setEventCode] = useState("");
   const [tried, setTried] = useState(false);
+  const [checking, setChecking] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
 
   const handleSignOut = async () => {
@@ -53,14 +54,35 @@ export function GuestDashboard() {
     }
   };
 
-  const joinNow = () => {
+  const joinNow = async () => {
     const code = eventCode.trim().toUpperCase();
     if (code.length < 4) {
       setTried(true);
       show("Enter the full event code to join");
       return;
     }
-    router.push(`/join/${code}`); // event landing page (prototype #screen-event)
+    setChecking(true);
+    setTried(false);
+    try {
+      const supabase = getSupabaseClient();
+      const { data: match } = await supabase
+        .from("events")
+        .select("code")
+        .eq("code", code)
+        .maybeSingle();
+      if (match) {
+        router.push(`/join/${code}`); // event landing page (prototype #screen-event)
+      } else {
+        setTried(true);
+        show("Event not found. Check your code and try again.");
+      }
+    } catch (err) {
+      setTried(true);
+      show("Could not look up the event. Please try again.");
+      console.error(err);
+    } finally {
+      setChecking(false);
+    }
   };
 
   const spentTotal = GUEST_HISTORY.reduce((n, h) => n + h.spent, 0);
@@ -132,9 +154,10 @@ export function GuestDashboard() {
                 />
                 <button
                   onClick={joinNow}
-                  className="shrink-0 rounded-lg bg-neon px-[18px] py-[11px] text-sm font-bold tracking-[1px] text-bg transition active:opacity-85"
+                  disabled={checking}
+                  className="shrink-0 rounded-lg bg-neon px-[18px] py-[11px] text-sm font-bold tracking-[1px] text-bg transition active:opacity-85 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Go →
+                  {checking ? "Checking…" : "Go →"}
                 </button>
               </div>
 

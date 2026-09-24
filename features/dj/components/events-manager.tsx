@@ -5,14 +5,15 @@ import Link from "next/link";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/use-toast";
 import {
-  PAST_EVENTS,
   EVENT_PALETTES,
   DJEvent,
+  type PastEvent,
 } from "@/features/dj/data";
 import { dbEventToGig, randomPin, type DbEventRow } from "@/features/dj/lib/dj-events";
 
 interface EventsManagerProps {
   initialEvents: DJEvent[];
+  recentEvents: PastEvent[];
   owner: { name: string; handle: string; avatar: string };
 }
 
@@ -29,6 +30,7 @@ const EMPTY_FORM = {
 
 export default function EventsManager({
   initialEvents,
+  recentEvents,
   owner,
 }: EventsManagerProps) {
   const { show, toastNode } = useToast();
@@ -207,7 +209,12 @@ export default function EventsManager({
         <div>
           <h2 className="mb-3 text-[11px] uppercase tracking-[2px] text-muted">Recent Gigs</h2>
           <div className="overflow-hidden rounded-xl border border-edge bg-surface">
-            {PAST_EVENTS.map((ev) => (
+            {recentEvents.length === 0 && (
+              <p className="p-6 text-center text-sm text-muted">
+                No past gigs yet — ended events will show up here
+              </p>
+            )}
+            {recentEvents.map((ev) => (
               <div
                 key={ev.name}
                 className="flex items-center gap-3 border-b border-edge px-4 py-3 last:border-b-0"

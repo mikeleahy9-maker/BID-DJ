@@ -19,20 +19,24 @@ import { GuestHireModal } from "./guest-hire-modal";
  * On `md+` it adapts to a web layout: stats become a full-width KPI row,
  * with the queue CTA on the left and the hire card in a right rail.
  */
-export function GuestEventPage({ eventCode }: { eventCode: string }) {
+export function GuestEventPage({
+  eventCode,
+  event,
+}: {
+  eventCode: string;
+  event: {
+    badge: string;
+    name: string;
+    djName: string;
+    meta: string;
+    queueCount: number;
+    guestCount: number;
+    topTitle: string;
+    topArtist: string;
+  };
+}) {
   const router = useRouter();
   const [hireOpen, setHireOpen] = useState(false);
-
-  const event = {
-    badge: "🎉 TONIGHT",
-    name: "The Loft",
-    dj: "DJ Phantom",
-    meta: "📍 The Loft Bar  ·  9 PM – 2 AM",
-    queueCount: 5,
-    guestCount: 24,
-    topTitle: "Blinding Lights",
-    topArtist: "The Weeknd · 42 credits",
-  };
 
   const stats = [
     { value: `${event.queueCount}`, label: "Songs in Queue" },
@@ -65,7 +69,7 @@ export function GuestEventPage({ eventCode }: { eventCode: string }) {
                 {event.name}
               </h1>
               <div className="mt-1 text-sm font-semibold text-neon">
-                {event.dj}
+                {event.djName}
               </div>
               <div className="mt-0.5 text-xs text-muted">{event.meta}</div>
             </div>
@@ -112,7 +116,7 @@ export function GuestEventPage({ eventCode }: { eventCode: string }) {
 
             {/* Enter the Queue (event-join-btn) */}
             <button
-              onClick={() => router.push("/request")}
+              onClick={() => router.push(`/request?event=${eventCode}`)}
               className="flex w-full cursor-pointer items-center gap-3.5 rounded-xl border-none bg-[linear-gradient(135deg,#ff2d78,#cc1155)] px-[18px] py-4 text-left text-white shadow-[0_0_24px_rgba(255,45,120,0.25)] transition-transform active:scale-[0.98]"
             >
               <span className="text-2xl" aria-hidden>
@@ -155,7 +159,7 @@ export function GuestEventPage({ eventCode }: { eventCode: string }) {
                     Available to Book
                   </span>
                   <span className="block font-display text-[20px] leading-none tracking-[1.5px]">
-                    {event.dj}
+                    {event.djName}
                   </span>
                   <span className="mt-0.5 block text-[10px] text-muted">
                     Weddings · Clubs · Private Events
