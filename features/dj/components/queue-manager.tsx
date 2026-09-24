@@ -11,6 +11,8 @@ import {
   REFUND_REASONS,
   PRICING,
   QueueItem,
+  SeedSong,
+  SONG_CATALOG,
 } from "@/features/dj/data";
 
 interface PlayedLog {
@@ -25,7 +27,15 @@ interface PlayedLog {
  * and the end-of-event charge flow.
  */
 
-export default function QueueManager({ appUrl }: { appUrl: string }) {
+export default function QueueManager({
+  appUrl,
+  eventContext,
+  helperMode = false,
+}: {
+  appUrl: string;
+  eventContext?: { name: string; code: string };
+  helperMode?: boolean;
+}) {
   const { show, toastNode } = useToast();
 
   const [queue, setQueue] = useState<QueueItem[]>(INITIAL_QUEUE);
@@ -41,6 +51,10 @@ export default function QueueManager({ appUrl }: { appUrl: string }) {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showEndCharge, setShowEndCharge] = useState(false);
   const [showLiveQr, setShowLiveQr] = useState(false);
+
+  const [showSeed, setShowSeed] = useState(false);
+  const [seedQuery, setSeedQuery] = useState("");
+  const [seedBudget, setSeedBudget] = useState(5);
 
   const sorted = [...queue].sort((a, b) => b.credits - a.credits);
   const rankCls = ["text-neon-3", "text-gray-300", "text-[#cd7f32]"];
@@ -87,6 +101,30 @@ export default function QueueManager({ appUrl }: { appUrl: string }) {
     show("Request declined — credits refunded");
   };
 
+  const filteredSongs = SONG_CATALOG.filter(
+    (s) =>
+      s.title.toLowerCase().includes(seedQuery.toLowerCase()) ||
+      s.artist.toLowerCase().includes(seedQuery.toLowerCase())
+  ).slice(0, 6);
+
+  const seedSong = (song: SeedSong) => {
+    setQueue((prev) => {
+      const existing = prev.find((q) => String(q.id) === String(song.id));
+      if (existing) {
+        return prev.map((q) =>
+          String(q.id) === String(song.id)
+            ? { ...q, credits: q.credits + seedBudget }
+            : q
+        );
+      }
+      return [{ ...song, credits: seedBudget, bidders: 0, seeded: true }, ...prev];
+    });
+    setShowSeed(false);
+    setSeedQuery("");
+    setSeedBudget(5);
+    show(`🎯 "${song.title}" seeded with 💎${seedBudget}!`);
+  };
+
   const totalCollected =
     Object.values(GUEST_SPENDING).reduce((a, b) => a + b, 0) * PRICING.CREDIT_VALUE;
   const djCut = totalCollected * PRICING.DJ_PCT;
@@ -96,11 +134,17 @@ export default function QueueManager({ appUrl }: { appUrl: string }) {
   return (
     <div className="flex flex-col gap-6">
       {/* Earnings + actions */}
-      <section className="flex flex-wrap items-center gap-4 rounded-xl border border-neon/20 bg-gradient-to-br from-neon/8 to-neon-2/6 p-5">
+      <section
+        className={`flex flex-wrap items-center gap-4 rounded-xl border p-5 ${
+          helperMode
+            ? "border-edge bg-surface"
+            : "border-neon/20 bg-gradient-to-br from-neon/8 to-neon-2/6"
+        }`}
+      >
         <div>
           <div className="text-[11px] uppercase tracking-[1px] text-muted">Tonight&apos;s Earnings</div>
-          <div className="font-display text-5xl tracking-[2px] text-neon">
-            ${earned.toFixed(2)}
+          <div className={`font-display text-5xl tracking-[2px] ${helperMode ? "text-muted" : "text-neon"}`}>
+            {helperMode ? "—" : `$${earned.toFixed(2)}`}
           </div>
           <div className="mt-1 text-xs text-muted">
             {songsPlayed} song{songsPlayed !== 1 && "s"} played
@@ -108,18 +152,23 @@ export default function QueueManager({ appUrl }: { appUrl: string }) {
         </div>
         <div className="ml-auto flex flex-col gap-2 sm:flex-row">
           <button
-            onClick={() => setShowLiveQr(true)}
-            className="rounded-lg border border-neon px-3 py-2 text-xs font-bold text-neon transition hover:bg-neon/10"
-          >
-            📲 QR
-          </button>
-          <button
             onClick={() => setShowEndConfirm(true)}
-            className="rounded-lg bg-neon-2 px-4 py-2 text-xs font-bold text-white transition hover:opacity-90"
+            disabled={helperMode}
+            title={helperMode ? "Only the event owner can end the event" : undefined}
+            className={`rounded-lg px-4 py-2 text-xs font-bold text-white transition ${
+              helperMode
+                ? "cursor-not-allowed bg-neon-2/30 text-white/60"
+                : "bg-neon-2 hover:opacity-90"
+            }`}
           >
             END EVENT & CHARGE CARDS
           </button>
         </div>
+        {helperMode && (
+          <p className="w-full text-[11px] text-muted">
+            🔒 Queue only — only the event owner can view earnings or end the event.
+          </p>
+        )}
       </section>
 
       {/* Leaderboard */}
@@ -129,9 +178,23 @@ export default function QueueManager({ appUrl }: { appUrl: string }) {
             <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-neon-2" aria-hidden />
             Live Leaderboard
           </h2>
-          <span className="rounded-full border border-edge bg-surface px-3 py-1 text-[11px] text-muted">
-            {sorted.length} in queue
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="rounded-full border border-edge bg-surface px-3 py-1 text-[11px] text-muted">
+              {sorted.length} in queue
+            </span>
+            <button
+              onClick={() => setShowLiveQr(true)}
+              className="rounded-lg border border-neon px-3 py-1.5 text-[11px] font-bold text-neon transition hover:bg-neon/10"
+            >
+              📲 QR
+            </button>
+            <button
+              onClick={() => setShowSeed(true)}
+              className="rounded-lg border border-neon-3 px-3 py-1.5 text-[11px] font-bold text-neon-3 transition hover:bg-neon-3/10"
+            >
+              🎯 Seed
+            </button>
+          </div>
         </div>
         <div className="flex flex-col gap-2.5">
           {sorted.length === 0 && (
@@ -239,13 +302,13 @@ export default function QueueManager({ appUrl }: { appUrl: string }) {
               <span className={`truncate text-[13px] ${entry.refunded ? "opacity-50" : ""}`}>
                 {entry.text}
               </span>
-              {entry.amount ? (
+              {!helperMode && entry.amount ? (
                 <span className="shrink-0 pl-3 text-[13px] font-semibold text-neon">
                   {entry.amount}
                 </span>
-              ) : (
+              ) : !helperMode && entry.refunded ? (
                 <span className="shrink-0 pl-3 text-xs font-semibold text-neon-2">refunded</span>
-              )}
+              ) : null}
             </div>
           ))}
         </div>
@@ -364,15 +427,69 @@ export default function QueueManager({ appUrl }: { appUrl: string }) {
         </button>
       </Modal>
 
+      {/* ---- Seed song modal ---- */}
+      <Modal open={showSeed} onClose={() => setShowSeed(false)}>
+        <div className="mb-1 font-display text-2xl tracking-[2px]">🎯 Seed a Song</div>
+        <p className="mb-4 text-xs text-muted">Pre-load a song with starter credits</p>
+        <input
+          className="w-full rounded-lg border border-edge bg-surface-2 px-3.5 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted focus:border-neon"
+          placeholder="Search songs to seed..."
+          value={seedQuery}
+          onChange={(e) => setSeedQuery(e.target.value)}
+          autoFocus
+        />
+        <div className="mt-2 flex gap-2">
+          {[5, 10, 20, 50].map((amt) => (
+            <button
+              key={amt}
+              onClick={() => setSeedBudget(amt)}
+              className={`flex-1 rounded-lg border px-3 py-2 text-sm font-semibold transition ${
+                seedBudget === amt
+                  ? "border-neon-3 text-neon-3"
+                  : "border-edge bg-surface-2 text-foreground hover:text-neon-3"
+              }`}
+            >
+              💎{amt}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-col">
+          {filteredSongs.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => seedSong(s)}
+              className="flex items-center justify-between rounded-lg px-2 py-2.5 text-left transition hover:bg-surface-2"
+            >
+              <span>
+                <span className="block text-sm font-semibold">{s.title}</span>
+                <span className="block text-[11px] text-muted">{s.artist}</span>
+              </span>
+              <span className="text-[11px] font-bold text-neon-3">+ 💎{seedBudget}</span>
+            </button>
+          ))}
+          {filteredSongs.length === 0 && (
+            <p className="py-3 text-center text-xs text-muted">No matching songs</p>
+          )}
+        </div>
+      </Modal>
+
       {/* ---- Live QR modal ---- */}
       <Modal open={showLiveQr} onClose={() => setShowLiveQr(false)}>
         <div className="text-center">
           <div className="mb-1 font-display text-2xl tracking-[2px]">Join Tonight</div>
           <p className="mb-4 text-xs text-muted">Scan to join the live queue</p>
           <div className="flex justify-center">
-            <QrDisplay value={`${appUrl}/join/LOFT22`} size={190} />
+            <QrDisplay
+              value={`${appUrl}/join/${eventContext?.code ?? "LOFT22"}`}
+              size={190}
+            />
           </div>
-          <div className="mt-3 font-display text-3xl tracking-[8px] text-neon">LOFT22</div>
+          <div className="mt-3 font-display text-3xl tracking-[8px] text-neon">
+            {eventContext?.code ?? "LOFT22"}
+          </div>
+          {eventContext && (
+            <div className="mt-1 text-xs text-muted">{eventContext.name}</div>
+          )}
           <div className="mt-1 text-xs text-muted">Guest PIN: <b className="text-neon">5678</b> · Helper PIN: <b className="text-neon">9999</b></div>
         </div>
       </Modal>
