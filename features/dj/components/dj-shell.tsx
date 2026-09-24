@@ -7,20 +7,17 @@ import { Logo } from "@/components/shared/logo";
 import { useToast } from "@/components/ui/use-toast";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
-export type DJRole = "owner" | "helper";
-
 interface NavItem {
   href: string;
   label: string;
   icon: string;
-  ownerOnly?: boolean;
 }
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/dj/events", label: "Gigs", icon: "📅" },
   { href: "/dj/queue", label: "Live Queue", icon: "🔴" },
-  { href: "/dj/earnings", label: "Earnings", icon: "💰", ownerOnly: true },
-  { href: "/dj/settings", label: "Settings", icon: "⚙", ownerOnly: true },
+  { href: "/dj/earnings", label: "Earnings", icon: "💰" },
+  { href: "/dj/settings", label: "Settings", icon: "⚙" },
 ];
 
 function isActivePath(pathname: string, href: string): boolean {
@@ -40,7 +37,6 @@ export function DjShell({
 }: DjShellProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [role, setRole] = useState<DJRole>("owner");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const { show, toastNode } = useToast();
@@ -59,7 +55,7 @@ export function DjShell({
     }
   };
 
-  const visibleNav = NAV_ITEMS.filter((item) => !(role === "helper" && item.ownerOnly));
+  const visibleNav = NAV_ITEMS;
 
   const activeLabel =
     visibleNav.find((item) => isActivePath(pathname, item.href))?.label ?? "Gigs";
@@ -150,31 +146,11 @@ export function DjShell({
             >
               👁 Preview
             </button>
-            <button
-              onClick={() =>
-                setRole((r) => {
-                  const next = r === "owner" ? "helper" : "owner";
-                  show(next === "helper" ? "Helper mode — queue only" : "Owner mode restored");
-                  return next;
-                })
-              }
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
-                role === "owner"
-                  ? "border-neon-3 text-neon-3"
-                  : "border-neon-2 text-neon-2"
-              }`}
-            >
-              {role === "owner" ? "🎛️ OWNER" : "🤝 HELPER"}
-            </button>
+            <span className="rounded-full border border-neon-3 px-3 py-1.5 text-xs font-semibold text-neon-3">
+              🎛️ OWNER
+            </span>
           </div>
         </header>
-
-        {/* ---- Helper-mode banner ---- */}
-        {role === "helper" && (
-          <div className="border-b border-neon-3/30 bg-gradient-to-r from-neon-3/15 to-neon-3/5 px-4 py-2 text-center text-[11px] font-semibold tracking-[1px] text-neon-3 lg:ml-60">
-            🤝 HELPER MODE — Queue management only. Contact the owner to end the event.
-          </div>
-        )}
 
         {/* ---- Mobile drawer ---- */}
         {drawerOpen && (
@@ -200,15 +176,6 @@ export function DjShell({
                 {visibleNav.map(navLink)}
               </nav>
               <div className="border-t border-edge p-4">
-                <button
-                  onClick={() => {
-                    setRole((r) => (r === "owner" ? "helper" : "owner"));
-                    setDrawerOpen(false);
-                  }}
-                  className="w-full rounded-lg border border-edge px-3 py-2 text-xs font-semibold text-neon-3"
-                >
-                  {role === "owner" ? "Switch to Helper" : "Switch to Owner"}
-                </button>
                 <button
                   onClick={handleSignOut}
                   disabled={signingOut}
