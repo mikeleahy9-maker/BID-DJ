@@ -57,6 +57,7 @@ export default function EventSetupPanel({
   const [ev, setEv] = useState<DJEvent>(initialEvent);
   const [seedList, setSeedList] = useState<SeedSong[]>(initialEvent.seedList);
   const [showQr, setShowQr] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [showSeed, setShowSeed] = useState(false);
   const [seedQuery, setSeedQuery] = useState("");
   const [seedBudget, setSeedBudget] = useState(5);
@@ -119,6 +120,16 @@ export default function EventSetupPanel({
   const copyText = (text: string, label: string) => {
     navigator.clipboard?.writeText(text).catch(() => {});
     show(`${label} copied: ${text}`);
+  };
+
+  const saveQrPng = () => {
+    if (!qrDataUrl) return;
+    const a = document.createElement("a");
+    a.href = qrDataUrl;
+    a.download = `${ev.code}-QR.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const openEdit = () => {
@@ -257,15 +268,19 @@ export default function EventSetupPanel({
           <div className="flex shrink-0 gap-2">
             <button
               onClick={openEdit}
-              className="rounded-lg border border-neon px-3 py-1.5 text-[11px] font-bold text-neon transition hover:bg-neon/10"
+              title="Edit event"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-neon/40 bg-neon/5 px-3 py-1.5 text-[11px] font-bold text-neon transition hover:border-neon hover:bg-neon/15 hover:shadow-[0_0_14px_rgba(0,255,225,0.2)] active:scale-95"
             >
-              ✏ Edit
+              <PencilIcon className="h-3.5 w-3.5" />
+              Edit
             </button>
             <button
               onClick={() => setShowDelete(true)}
-              className="rounded-lg border border-[#ff4466]/50 px-3 py-1.5 text-[11px] font-bold text-[#ff4466] transition hover:bg-[#ff4466]/10"
+              title="Delete event"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#ff4466]/40 bg-[#ff4466]/5 px-3 py-1.5 text-[11px] font-bold text-[#ff4466] transition hover:border-[#ff4466]/80 hover:bg-[#ff4466]/15 hover:shadow-[0_0_14px_rgba(255,68,102,0.2)] active:scale-95"
             >
-              🗑 Delete
+              <TrashIcon className="h-3.5 w-3.5" />
+              Delete
             </button>
           </div>
         </div>
@@ -312,7 +327,7 @@ export default function EventSetupPanel({
             </button>
           </div>
           <div className="flex justify-center">
-            <QrDisplay value={`${appUrl}/join/${ev.code}`} size={140} />
+            <QrDisplay value={`${appUrl}/join/${ev.code}`} size={140} onDataUrl={setQrDataUrl} />
           </div>
           <div className="mt-2 font-display text-2xl tracking-[8px] text-neon">
             {ev.code}
@@ -320,12 +335,22 @@ export default function EventSetupPanel({
           <div className="mb-2 text-[11px] text-muted">
             Encodes: {appUrl}/join/{ev.code}
           </div>
-          <button
-            onClick={() => copyText(`${appUrl}/join/${ev.code}`, "Guest link")}
-            className="w-full rounded-lg border border-edge bg-surface-2 px-3 py-2 text-xs font-bold text-foreground transition hover:border-neon hover:text-neon"
-          >
-            📋 Copy Guest Link
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => copyText(`${appUrl}/join/${ev.code}`, "Guest link")}
+              className="flex-1 rounded-lg border border-edge bg-surface-2 px-3 py-2 text-xs font-bold text-foreground transition hover:border-neon hover:text-neon"
+            >
+              📋 Copy Guest Link
+            </button>
+            <button
+              onClick={saveQrPng}
+              disabled={!qrDataUrl}
+              title="Download this QR code as a PNG image"
+              className="flex-1 rounded-lg border border-neon/40 bg-neon/5 px-3 py-2 text-xs font-bold text-neon transition hover:border-neon hover:bg-neon/15 active:scale-95 disabled:opacity-40"
+            >
+              ⬇️ Save PNG
+            </button>
+          </div>
         </div>
 
         {/* Seed playlist */}
@@ -403,7 +428,10 @@ export default function EventSetupPanel({
 
       {/* ---- Edit event modal ---- */}
       <Modal open={showEdit} onClose={() => setShowEdit(false)}>
-        <div className="mb-1 font-display text-2xl tracking-[2px]">✏ Edit Event</div>
+        <div className="mb-1 flex items-center gap-2 font-display text-2xl tracking-[2px]">
+          <PencilIcon className="h-5 w-5 text-neon" />
+          Edit Event
+        </div>
         <p className="mb-4 text-xs text-muted">{ev.name} · Code {ev.code}</p>
 
         <div className="mb-4 flex flex-col gap-3">
@@ -605,8 +633,9 @@ export default function EventSetupPanel({
 
       {/* ---- Delete event modal ---- */}
       <Modal open={showDelete} onClose={() => setShowDelete(false)}>
-        <div className="mb-1 font-display text-2xl tracking-[2px] text-[#ff4466]">
-          🗑 Delete Event
+        <div className="mb-1 flex items-center gap-2 font-display text-2xl tracking-[2px] text-[#ff4466]">
+          <TrashIcon className="h-5 w-5" />
+          Delete Event
         </div>
         <p className="mb-2 text-sm text-foreground">
           Permanently delete <b>{ev.name}</b>?
@@ -684,21 +713,69 @@ export default function EventSetupPanel({
           <div className="mb-1 font-display text-2xl tracking-[2px]">Event QR Code</div>
           <p className="mb-4 text-xs text-muted">Print or display at the venue</p>
           <div className="flex justify-center">
-            <QrDisplay value={`${appUrl}/join/${ev.code}`} size={200} />
+            <QrDisplay value={`${appUrl}/join/${ev.code}`} size={200} onDataUrl={setQrDataUrl} />
           </div>
           <div className="mt-3 font-display text-3xl tracking-[8px] text-neon">
             {ev.code}
           </div>
-          <button
-            onClick={() => copyText(`${appUrl}/join/${ev.code}`, "Guest link")}
-            className="mt-4 w-full rounded-lg border border-edge bg-surface-2 px-3 py-2.5 text-xs font-bold text-foreground transition hover:border-neon hover:text-neon"
-          >
-            📋 Copy Guest Link
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={() => copyText(`${appUrl}/join/${ev.code}`, "Guest link")}
+              className="flex-1 rounded-lg border border-edge bg-surface-2 px-3 py-2.5 text-xs font-bold text-foreground transition hover:border-neon hover:text-neon"
+            >
+              📋 Copy Guest Link
+            </button>
+            <button
+              onClick={saveQrPng}
+              disabled={!qrDataUrl}
+              title="Download this QR code as a PNG image"
+              className="flex-1 rounded-lg border border-neon/40 bg-neon/5 px-3 py-2.5 text-xs font-bold text-neon transition hover:border-neon hover:bg-neon/15 active:scale-95 disabled:opacity-40"
+            >
+              ⬇️ Save PNG
+            </button>
+          </div>
         </div>
       </Modal>
 
       {toastNode}
     </div>
+  );
+}
+
+function PencilIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3Z" />
+    </svg>
+  );
+}
+
+function TrashIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M3 6h18" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+      <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
+    </svg>
   );
 }

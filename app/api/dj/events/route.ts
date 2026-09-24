@@ -6,12 +6,53 @@ import { EVENT_PROJECTION } from "@/features/dj/lib/dj-events";
 
 const LOGO_BUCKET = "bid a beat";
 const LOGO_FOLDER = "Event images";
-const CODE_ATTEMPTS = 5;
+const CODE_ATTEMPTS_PER_LEVEL = 10;
+const CODE_SUFFIX_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
-function generateCode(): string {
-  let digits = "";
-  for (let i = 0; i < 4; i++) digits += String(randomInt(0, 10));
-  return `BB${digits}`;
+const CODE_SKIP_WORDS = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "for",
+  "of",
+  "at",
+  "&",
+  "+",
+  "club",
+  "bar",
+  "lounge",
+  "cafe",
+  "pub",
+  "grill",
+]);
+
+function codeStem(name: string): string {
+  const words = name
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((w) => !CODE_SKIP_WORDS.has(w));
+  const letters = words.join("").replace(/[^a-z0-9]/g, "");
+  if (!letters) return "BB";
+  return letters.slice(0, 4).toUpperCase().padEnd(4, "X");
+}
+
+function codeSuffix(level: number): string {
+  let out = "";
+  for (let i = 0; i < 4; i++) {
+    if (level === 0) {
+      out += String(randomInt(0, 10));
+    } else {
+      out += CODE_SUFFIX_CHARS[randomInt(0, CODE_SUFFIX_CHARS.length)];
+    }
+  }
+  return out;
+}
+
+function generateCode(name: string, level: number): string {
+  return `${codeStem(name)}${codeSuffix(level)}`;
 }
 
 export async function POST(req: NextRequest) {
@@ -117,8 +158,10 @@ export async function POST(req: NextRequest) {
   }
 
   let created: Record<string, unknown> | null = null;
-  for (let attempt = 0; attempt < CODE_ATTEMPTS; attempt++) {
-    const code = generateCode();
+  const maxAttempts = CODE_ATTEMPTS_PER_LEVEL * 2;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const level = Math.floor(attempt / CODE_ATTEMPTS_PER_LEVEL);
+    const code = generateCode(name, level);
     const { data, error } = await supabase
       .from("events")
       .insert({
@@ -143,7 +186,7 @@ export async function POST(req: NextRequest) {
       created = data as Record<string, unknown>;
       break;
     }
-    if (!error.message?.toLowerCase().includes("code")) {
+    if (error.code !== "23505") {
       throw error;
     }
   }

@@ -148,18 +148,26 @@ export default function EventsManager({
           <div className="font-display text-xl tracking-[1.5px]">{owner.name}</div>
           <div className="text-[11px] text-neon">{owner.handle}</div>
         </div>
-        <button
-          onClick={openCreate}
-          className="ml-auto rounded-lg border border-neon px-4 py-2 text-xs font-bold text-neon transition hover:bg-neon/10"
+        <Link
+          href="/dj/settings"
+          className="ml-auto rounded-lg border border-edge bg-surface-2 px-4 py-2 text-xs font-bold text-foreground transition hover:border-neon hover:text-neon"
         >
-          + New Event
-        </button>
+          ⚙
+        </Link>
       </section>
 
       {/* Full-width gigs list */}
       <div className="flex flex-col gap-4">
         <div>
-          <h2 className="mb-3 text-[11px] uppercase tracking-[2px] text-muted">Upcoming Gigs</h2>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-[11px] uppercase tracking-[2px] text-muted">Upcoming Gigs</h2>
+            <button
+              onClick={openCreate}
+              className="rounded-lg border border-neon px-3 py-1.5 text-[11px] font-bold text-neon transition hover:bg-neon/10"
+            >
+              + New Event
+            </button>
+          </div>
           <div className="flex flex-col gap-2.5">
             {events.length === 0 && (
               <p className="rounded-xl border border-dashed border-edge bg-surface/60 p-6 text-center text-sm text-muted">
@@ -169,8 +177,9 @@ export default function EventsManager({
             {events.map((ev) => (
               <div
                 key={ev.id}
-                className="rounded-xl border border-edge bg-surface p-4 transition-colors"
+                className="relative overflow-hidden rounded-xl border border-edge bg-surface p-4 transition-colors"
               >
+                <span className="absolute inset-y-0 left-0 w-[3px] bg-neon" aria-hidden />
                 <div className="font-display text-xl tracking-[1.5px]">{ev.name}</div>
                 <div className="mt-1 text-[11px] text-muted">
                   {ev.date} · {ev.time} · Code:{" "}
@@ -179,7 +188,7 @@ export default function EventsManager({
                 <div className="mt-3 flex gap-2">
                   <Link
                     href={`/dj/events/${ev.id}`}
-                    className="flex-1 rounded-lg border border-edge bg-surface-2 px-3 py-2 text-center text-[11px] font-bold text-foreground transition hover:border-neon hover:text-neon"
+                    className="flex-1 rounded-lg border border-neon bg-neon/5 px-3 py-2 text-center text-[11px] font-bold text-neon transition hover:bg-neon/15"
                   >
                     ⚙ Setup & QR
                   </Link>

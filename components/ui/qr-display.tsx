@@ -1,19 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
 
 interface QrDisplayProps {
   value: string;
   size?: number;
   className?: string;
+  onDataUrl?: (dataUrl: string) => void;
 }
 
 /**
  * Renders a real QR code (data URL) for guest-join links.
  */
-export function QrDisplay({ value, size = 160, className = "" }: QrDisplayProps) {
+export function QrDisplay({
+  value,
+  size = 160,
+  className = "",
+  onDataUrl,
+}: QrDisplayProps) {
   const [src, setSrc] = useState<string | null>(null);
+  const onDataUrlRef = useRef(onDataUrl);
+  useEffect(() => {
+    onDataUrlRef.current = onDataUrl;
+  }, [onDataUrl]);
 
   useEffect(() => {
     let active = true;
@@ -24,7 +34,10 @@ export function QrDisplay({ value, size = 160, className = "" }: QrDisplayProps)
       color: { dark: "#000000", light: "#ffffff" },
     })
       .then((url) => {
-        if (active) setSrc(url);
+        if (active) {
+          setSrc(url);
+          onDataUrlRef.current?.(url);
+        }
       })
       .catch(() => {
         if (active) setSrc(null);
