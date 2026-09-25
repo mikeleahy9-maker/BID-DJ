@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/use-toast";
 import {
@@ -34,8 +35,31 @@ export default function EventsManager({
   owner,
 }: EventsManagerProps) {
   const { show, toastNode } = useToast();
+  const router = useRouter();
   const [events, setEvents] = useState<DJEvent[]>(initialEvents);
   const [showCreate, setShowCreate] = useState(false);
+  const [goingLiveId, setGoingLiveId] = useState<string | null>(null);
+
+  const goLive = async (id: string) => {
+    setGoingLiveId(id);
+    try {
+      const res = await fetch(`/api/dj/events/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "live" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not go live");
+      setEvents((prev) =>
+        prev.map((ev) => (ev.id === id ? { ...ev, status: "live" } : ev))
+      );
+      router.push("/dj/queue");
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Could not go live");
+    } finally {
+      setGoingLiveId(null);
+    }
+  };
 
   // Create-event form state
   const [form, setForm] = useState({
@@ -194,12 +218,23 @@ export default function EventsManager({
                   >
                     ⚙ Setup & QR
                   </Link>
-                  <Link
-                    href="/dj/queue"
-                    className="flex-1 rounded-lg border border-neon-2 px-3 py-2 text-center text-[11px] font-bold text-neon-2 transition hover:bg-neon-2/10"
+                  <button
+                    disabled={goingLiveId === ev.id}
+                    onClick={() => goLive(ev.id)}
+                    className={[
+                      "flex-1 rounded-lg border px-3 py-2 text-center text-[11px] font-bold transition",
+                      ev.status === "live"
+                        ? "border-neon-2 bg-neon-2/10 text-neon-2"
+                        : "border-neon-2 text-neon-2 hover:bg-neon-2/10",
+                      goingLiveId === ev.id ? "opacity-60" : "",
+                    ].join(" ")}
                   >
-                    ▶ Go Live
-                  </Link>
+                    {goingLiveId === ev.id
+                      ? "Going live…"
+                      : ev.status === "live"
+                        ? "● LIVE"
+                        : "▶ Go Live"}
+                  </button>
                 </div>
               </div>
             ))}

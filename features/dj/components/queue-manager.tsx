@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { QrDisplay } from "@/components/ui/qr-display";
 import { useToast } from "@/components/ui/use-toast";
+import { searchDeezerSongs } from "@/features/dj/lib/deezer";
 import {
   INITIAL_QUEUE,
   PENDING_REQUESTS,
@@ -12,7 +13,6 @@ import {
   PRICING,
   QueueItem,
   SeedSong,
-  SONG_CATALOG,
 } from "@/features/dj/data";
 
 interface PlayedLog {
@@ -55,6 +55,9 @@ export default function QueueManager({
   const [showSeed, setShowSeed] = useState(false);
   const [seedQuery, setSeedQuery] = useState("");
   const [seedBudget, setSeedBudget] = useState(5);
+  const [seedResults, setSeedResults] = useState<SeedSong[]>([]);
+  const [seedSearching, setSeedSearching] = useState(false);
+  const seedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sorted = [...queue].sort((a, b) => b.credits - a.credits);
   const rankCls = ["text-neon-3", "text-gray-300", "text-[#cd7f32]"];
@@ -101,11 +104,28 @@ export default function QueueManager({
     show("Request declined — credits refunded");
   };
 
-  const filteredSongs = SONG_CATALOG.filter(
-    (s) =>
-      s.title.toLowerCase().includes(seedQuery.toLowerCase()) ||
-      s.artist.toLowerCase().includes(seedQuery.toLowerCase())
-  ).slice(0, 6);
+  useEffect(() => {
+    return () => {
+      if (seedTimerRef.current) clearTimeout(seedTimerRef.current);
+    };
+  }, []);
+
+  const handleSeedSearch = (value: string) => {
+    setSeedQuery(value);
+    const q = value.trim();
+    if (seedTimerRef.current) clearTimeout(seedTimerRef.current);
+    if (q.length < 2) {
+      setSeedResults([]);
+      setSeedSearching(false);
+      return;
+    }
+    setSeedSearching(true);
+    seedTimerRef.current = setTimeout(async () => {
+      const results = await searchDeezerSongs(q);
+      setSeedResults(results);
+      setSeedSearching(false);
+    }, 700);
+  };
 
   const seedSong = (song: SeedSong) => {
     setQueue((prev) => {
@@ -433,9 +453,9 @@ export default function QueueManager({
         <p className="mb-4 text-xs text-muted">Pre-load a song with starter credits</p>
         <input
           className="w-full rounded-lg border border-edge bg-surface-2 px-3.5 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted focus:border-neon"
-          placeholder="Search songs to seed..."
+          placeholder="Search Deezer for songs to seed..."
           value={seedQuery}
-          onChange={(e) => setSeedQuery(e.target.value)}
+          onChange={(e) => handleSeedSearch(e.target.value)}
           autoFocus
         />
         <div className="mt-2 flex gap-2">
@@ -454,21 +474,41 @@ export default function QueueManager({
           ))}
         </div>
         <div className="mt-3 flex flex-col">
-          {filteredSongs.map((s) => (
+          {seedResults.map((s) => (
             <button
               key={s.id}
               onClick={() => seedSong(s)}
               className="flex items-center justify-between rounded-lg px-2 py-2.5 text-left transition hover:bg-surface-2"
             >
-              <span>
-                <span className="block text-sm font-semibold">{s.title}</span>
-                <span className="block text-[11px] text-muted">{s.artist}</span>
+              <span className="flex min-w-0 flex-1 items-center gap-3">
+                {s.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={s.image}
+                    alt={s.title}
+                    className="h-10 w-10 shrink-0 rounded-md object-cover"
+                  />
+                ) : (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-2 text-lg">
+                    🎵
+                  </span>
+                )}
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">{s.title}</span>
+                  <span className="block truncate text-[11px] text-muted">{s.artist}</span>
+                </span>
               </span>
-              <span className="text-[11px] font-bold text-neon-3">+ 💎{seedBudget}</span>
+              <span className="ml-3 text-[11px] font-bold text-neon-3">+ 💎{seedBudget}</span>
             </button>
           ))}
-          {filteredSongs.length === 0 && (
+          {seedSearching && (
+            <p className="py-3 text-center text-xs text-muted">Searching Deezer…</p>
+          )}
+          {!seedSearching && seedQuery.trim().length >= 2 && seedResults.length === 0 && (
             <p className="py-3 text-center text-xs text-muted">No matching songs</p>
+          )}
+          {seedQuery.trim().length < 2 && (
+            <p className="py-3 text-center text-xs text-muted">Start typing to search Deezer</p>
           )}
         </div>
       </Modal>

@@ -1,16 +1,16 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { QrDisplay } from "@/components/ui/qr-display";
 import { useToast } from "@/components/ui/use-toast";
+import { searchDeezerSongs } from "@/features/dj/lib/deezer";
 import {
   DJEvent,
   EVENT_PALETTES,
-  SAVED_PLAYLISTS,
-  SONG_CATALOG,
+  SavedPlaylist,
   SeedSong,
 } from "@/features/dj/data";
 import {
@@ -47,20 +47,30 @@ export default function EventSetupPanel({
   event: initialEvent,
   appUrl,
   dbRow,
+  initialSeedList,
+  initialPlaylists,
 }: {
   event: DJEvent;
   appUrl: string;
   dbRow: DbEventRow;
+  initialSeedList?: SeedSong[];
+  initialPlaylists?: SavedPlaylist[];
 }) {
   const router = useRouter();
   const { show, toastNode } = useToast();
   const [ev, setEv] = useState<DJEvent>(initialEvent);
-  const [seedList, setSeedList] = useState<SeedSong[]>(initialEvent.seedList);
+  const [seedList, setSeedList] = useState<SeedSong[]>(
+    initialSeedList ?? initialEvent.seedList
+  );
+  const [playlists] = useState<SavedPlaylist[]>(initialPlaylists ?? []);
   const [showQr, setShowQr] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [showSeed, setShowSeed] = useState(false);
   const [seedQuery, setSeedQuery] = useState("");
   const [seedBudget, setSeedBudget] = useState(5);
+  const [seedResults, setSeedResults] = useState<SeedSong[]>([]);
+  const [seedSearching, setSeedSearching] = useState(false);
+  const seedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [showEdit, setShowEdit] = useState(false);
   const [row, setRow] = useState<DbEventRow>(dbRow);
@@ -75,46 +85,117 @@ export default function EventSetupPanel({
 
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [goingLive, setGoingLive] = useState(false);
 
-  const filteredSongs = SONG_CATALOG.filter(
-    (s) =>
-      s.title.toLowerCase().includes(seedQuery.toLowerCase()) ||
-      s.artist.toLowerCase().includes(seedQuery.toLowerCase())
-  ).slice(0, 6);
+  useEffect(() => {
+    return () => {
+      if (seedTimerRef.current) clearTimeout(seedTimerRef.current);
+    };
+  }, []);
 
-  const seedSong = (song: SeedSong) => {
+  const goLive = async () => {
+    setGoingLive(true);
+    try {
+      const res = await fetch(`/api/dj/events/${row.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "live" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Could not go live");
+      setRow((prev) => ({ ...prev, status: "live" }));
+      router.push("/dj/queue");
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Could not go live");
+    } finally {
+      setGoingLive(false);
+    }
+  };
+
+  const handleSeedSearch = (value: string) => {
+    setSeedQuery(value);
+    const q = value.trim();
+    if (seedTimerRef.current) clearTimeout(seedTimerRef.current);
+    if (q.length < 2) {
+      setSeedResults([]);
+      setSeedSearching(false);
+      return;
+    }
+    setSeedSearching(true);
+    seedTimerRef.current = setTimeout(async () => {
+      const results = await searchDeezerSongs(q);
+      setSeedResults(results);
+      setSeedSearching(false);
+    }, 700);
+  };
+
+  const persistSeed = async (song: SeedSong, budget: number) => {
+    try {
+      const res = await fetch(`/api/dj/events/${row.id}/tracks`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: song.title,
+          artist: song.artist,
+          credits: budget,
+          deezerId: song.deezerId ?? null,
+          image: song.image ?? null,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        show(data?.error ?? "Saved locally — could not persist to the event.");
+      }
+    } catch {
+      show("Saved locally — could not persist to the event.");
+    }
+  };
+
+  const seedSong = async (song: SeedSong) => {
+    const budget = seedBudget;
     setSeedList((prev) => {
       const exists = prev.find((x) => String(x.id) === String(song.id));
       if (exists) {
         return prev.map((x) =>
           String(x.id) === String(song.id)
-            ? { ...x, credits: x.credits + seedBudget }
+            ? { ...x, credits: x.credits + budget }
             : x
         );
       }
-      return [...prev, { ...song, credits: seedBudget }];
+      return [...prev, { ...song, credits: budget }];
     });
     setShowSeed(false);
     setSeedQuery("");
     setSeedBudget(5);
-    show(`🎯 "${song.title}" seeded with 💎${seedBudget}!`);
+    show(`🎯 "${song.title}" seeded with 💎${budget}!`);
+    persistSeed(song, budget);
   };
 
-  const removeSeed = (id: string) => {
+  const removeSeed = (id: string, deezerId?: number | null) => {
     setSeedList((prev) => prev.filter((s) => String(s.id) !== String(id)));
+    if (deezerId) {
+      fetch(`/api/dj/events/${row.id}/tracks?deezerId=${deezerId}`, {
+        method: "DELETE",
+      }).catch(() => {});
+    }
   };
 
   const loadPlaylist = (plId: string) => {
-    const pl = SAVED_PLAYLISTS.find((p) => p.id === plId);
+    const pl = playlists.find((p) => p.id === plId);
     if (!pl) return;
     setSeedList((prev) => {
       const merged = [...prev];
       pl.songs.forEach((s) => {
-        if (!merged.find((x) => String(x.id) === String(s.id))) merged.push(s);
+        if (!merged.find((x) => String(x.id) === String(s.id))) {
+          merged.push({ ...s, credits: s.credits || seedBudget });
+        }
       });
       return merged;
     });
     show(`"${pl.name}" loaded into seed list!`);
+    pl.songs.forEach((s) =>
+      persistSeed(s, s.credits || seedBudget)
+    );
   };
 
   const copyText = (text: string, label: string) => {
@@ -383,7 +464,7 @@ export default function EventSetupPanel({
               </div>
               <div className="font-display text-lg text-neon-3">💎{s.credits}</div>
               <button
-                onClick={() => removeSeed(s.id)}
+                onClick={() => removeSeed(s.id, s.deezerId)}
                 className="px-1 text-muted transition hover:text-neon-2"
                 aria-label={`Remove ${s.title}`}
               >
@@ -398,7 +479,16 @@ export default function EventSetupPanel({
           📂 Your Saved Playlists
         </div>
         <div className="mb-5 flex flex-col gap-2">
-          {SAVED_PLAYLISTS.map((pl) => (
+          {playlists.length === 0 && (
+            <p className="rounded-lg border border-dashed border-edge bg-surface-2 px-3 py-2.5 text-[11px] text-muted">
+              No playlists yet — create some in the{" "}
+              <Link href="/dj/playlists" className="text-neon">
+                Playlists
+              </Link>{" "}
+              page.
+            </p>
+          )}
+          {playlists.map((pl) => (
             <div
               key={pl.id}
               className="flex items-center gap-3 rounded-lg border border-edge bg-surface-2 px-3 py-2.5"
@@ -418,12 +508,17 @@ export default function EventSetupPanel({
           ))}
         </div>
 
-        <Link
-          href="/dj/queue"
-          className="block w-full rounded-xl bg-gradient-to-br from-neon to-[#00c9b1] px-4 py-3.5 text-center font-display text-lg tracking-[2px] text-bg shadow-[0_0_20px_rgba(0,255,225,0.2)] transition active:scale-[0.99]"
+        <button
+          onClick={goLive}
+          disabled={goingLive}
+          className="block w-full rounded-xl bg-gradient-to-br from-neon to-[#00c9b1] px-4 py-3.5 text-center font-display text-lg tracking-[2px] text-bg shadow-[0_0_20px_rgba(0,255,225,0.2)] transition active:scale-[0.99] disabled:opacity-60"
         >
-          ▶ GO LIVE WITH THIS EVENT
-        </Link>
+          {goingLive
+            ? "Starting live…"
+            : row.status === "live"
+              ? "● LIVE — OPEN QUEUE"
+              : "▶ GO LIVE WITH THIS EVENT"}
+        </button>
       </div>
 
       {/* ---- Edit event modal ---- */}
@@ -667,9 +762,9 @@ export default function EventSetupPanel({
         <p className="mb-4 text-xs text-muted">Pre-load a song with starter credits</p>
         <input
           className={inputCls}
-          placeholder="Search songs to seed..."
+          placeholder="Search Deezer for songs to seed..."
           value={seedQuery}
-          onChange={(e) => setSeedQuery(e.target.value)}
+          onChange={(e) => handleSeedSearch(e.target.value)}
           autoFocus
         />
         <div className="mt-2 flex gap-2">
@@ -688,21 +783,41 @@ export default function EventSetupPanel({
           ))}
         </div>
         <div className="mt-3 flex flex-col">
-          {filteredSongs.map((s) => (
+          {seedResults.map((s) => (
             <button
               key={s.id}
               onClick={() => seedSong(s)}
               className="flex items-center justify-between rounded-lg px-2 py-2.5 text-left transition hover:bg-surface-2"
             >
-              <span>
-                <span className="block text-sm font-semibold">{s.title}</span>
-                <span className="block text-[11px] text-muted">{s.artist}</span>
+              <span className="flex min-w-0 flex-1 items-center gap-3">
+                {s.image ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={s.image}
+                    alt={s.title}
+                    className="h-10 w-10 shrink-0 rounded-md object-cover"
+                  />
+                ) : (
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-surface-2 text-lg">
+                    🎵
+                  </span>
+                )}
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-semibold">{s.title}</span>
+                  <span className="block truncate text-[11px] text-muted">{s.artist}</span>
+                </span>
               </span>
-              <span className="text-[11px] font-bold text-neon-3">+ 💎{seedBudget}</span>
+              <span className="ml-3 text-[11px] font-bold text-neon-3">+ 💎{seedBudget}</span>
             </button>
           ))}
-          {filteredSongs.length === 0 && (
-            <p className="py-3 text-center text-xs text-muted">No matching songs</p>
+          {seedSearching && (
+            <p className="py-3 text-center text-xs text-muted">Searching Deezer…</p>
+          )}
+          {!seedSearching && seedQuery.trim().length >= 2 && seedResults.length === 0 && (
+            <p className="py-3 text-center text-xs text-muted">No matching songs on Deezer</p>
+          )}
+          {seedQuery.trim().length < 2 && (
+            <p className="py-3 text-center text-xs text-muted">Start typing to search Deezer</p>
           )}
         </div>
       </Modal>

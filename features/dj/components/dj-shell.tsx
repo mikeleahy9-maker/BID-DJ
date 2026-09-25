@@ -16,6 +16,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: "/dj/events", label: "Gigs", icon: "📅" },
   { href: "/dj/queue", label: "Live Queue", icon: "🔴" },
+  { href: "/dj/playlists", label: "Playlists", icon: "🎵" },
   { href: "/dj/earnings", label: "Earnings", icon: "💰" },
   { href: "/dj/settings", label: "Settings", icon: "⚙" },
 ];
@@ -28,12 +29,14 @@ interface DjShellProps {
   children: ReactNode;
   profileName?: string;
   accountLabel?: string;
+  isOwner?: boolean;
 }
 
 export function DjShell({
   children,
   profileName = "DJ",
   accountLabel = "owner account",
+  isOwner = true,
 }: DjShellProps) {
   const pathname = usePathname();
   const router = useRouter();
@@ -55,7 +58,9 @@ export function DjShell({
     }
   };
 
-  const visibleNav = NAV_ITEMS;
+  const visibleNav = isOwner
+    ? NAV_ITEMS
+    : NAV_ITEMS.filter((item) => item.href !== "/dj/playlists");
 
   const activeLabel =
     visibleNav.find((item) => isActivePath(pathname, item.href))?.label ?? "Gigs";

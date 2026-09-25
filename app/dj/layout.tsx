@@ -70,7 +70,11 @@ export default async function DJLayout({ children }: { children: React.ReactNode
     profile?.act_name || profile?.first_name || profile?.last_name || "Your";
 
   return (
-    <DjShell profileName={profileName} accountLabel={accountLabel}>
+    <DjShell
+      profileName={profileName}
+      accountLabel={accountLabel}
+      isOwner={role === "dj"}
+    >
       {locked && <DJActivationBanner />}
       {locked ? <ActivationGate name={displayName} /> : children}
     </DjShell>

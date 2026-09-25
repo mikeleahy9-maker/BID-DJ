@@ -75,6 +75,7 @@ export function dbEventToGig(row: DbEventRow): DJEvent {
     venue: row.venue ?? undefined,
     palette: row.palette ?? "noir",
     logo: row.logo_url ?? undefined,
+    status: row.status,
     seedList: [],
   };
 }

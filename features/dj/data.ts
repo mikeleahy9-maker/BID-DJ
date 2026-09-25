@@ -8,6 +8,9 @@ export interface SeedSong {
   title: string;
   artist: string;
   credits: number;
+  deezerId?: number | null;
+  image?: string | null;
+  durationSec?: number | null;
 }
 
 export interface EventPalette {
@@ -30,6 +33,7 @@ export interface DJEvent {
   venue?: string;
   palette?: string;
   logo?: string;
+  status?: string;
   seedList: SeedSong[];
 }
 
