@@ -1,70 +1,92 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useRef, useState } from "react";
 import { Modal } from "@/components/ui/modal";
-import { GUEST_SONG_CATALOG } from "../data";
-
-/**
- * GuestRequestSongModal - port of the prototype's REQUEST A SONG modal.
- * Search by title/artist over the demo catalog, plus a "Can't Find It"
- * freeform tab. Adding a song costs 2 credits; boosting an in-queue song
- * adds on top. (Local catalog search — Deezer proxy not wired.)
- */
+import { searchDeezerSongs } from "@/features/dj/lib/deezer";
+import type { SeedSong } from "@/features/dj/data";
 
 type SearchMode = "song" | "artist" | "freeform";
 
 const BLOCKED_WORDS = ["fuck", "shit", "bitch", "ass", "cunt", "nigger", "faggot"];
 
+export interface SongPick {
+  title: string;
+  artist: string;
+  deezerId?: number | null;
+  coverUrl?: string | null;
+}
+
 export function GuestRequestSongModal({
   open,
   onClose,
   credits,
-  onAddSong,
+  onRequest,
   onNotEnoughCredits,
 }: {
   open: boolean;
   onClose: () => void;
   credits: number;
-  onAddSong: (title: string, artist: string) => boolean; // true = added
+  onRequest: (song: SongPick) => Promise<boolean>;
   onNotEnoughCredits: () => void;
 }) {
   const [mode, setMode] = useState<SearchMode>("song");
   const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SeedSong[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [freeTitle, setFreeTitle] = useState("");
   const [freeArtist, setFreeArtist] = useState("");
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const reset = () => {
     setMode("song");
     setQuery("");
+    setResults([]);
+    setSearching(false);
     setFreeTitle("");
     setFreeArtist("");
   };
 
-  const results = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return GUEST_SONG_CATALOG;
-    return GUEST_SONG_CATALOG.filter((s) =>
-      mode === "artist"
-        ? s.artist.toLowerCase().includes(q)
-        : s.title.toLowerCase().includes(q) ||
-          s.artist.toLowerCase().includes(q)
-    ).slice(0, 15);
-  }, [query, mode]);
+  const handleSearch = (value: string) => {
+    setQuery(value);
+    const q = value.trim();
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    if (q.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    searchTimerRef.current = setTimeout(async () => {
+      const found = await searchDeezerSongs(q);
+      setResults(found);
+      setSearching(false);
+    }, 700);
+  };
 
-  const submitCatalog = (title: string, artist: string) => {
+  const submitCatalog = async (s: SeedSong) => {
+    if (submitting) return;
     if (credits < 2) {
       onClose();
       onNotEnoughCredits();
       return;
     }
-    const added = onAddSong(title, artist);
-    if (added) {
+    setSubmitting(true);
+    const ok = await onRequest({
+      title: s.title,
+      artist: s.artist,
+      deezerId: s.deezerId ?? null,
+      coverUrl: s.image ?? null,
+    });
+    setSubmitting(false);
+    if (ok) {
       onClose();
       reset();
     }
   };
 
-  const submitFreeform = () => {
+  const submitFreeform = async () => {
+    if (submitting) return;
     const title = freeTitle.trim();
     if (!title) {
       onClose();
@@ -80,8 +102,15 @@ export function GuestRequestSongModal({
       onNotEnoughCredits();
       return;
     }
-    const added = onAddSong(title, freeArtist || "Unknown Artist");
-    if (added) {
+    setSubmitting(true);
+    const ok = await onRequest({
+      title,
+      artist: freeArtist || "Unknown Artist",
+      deezerId: null,
+      coverUrl: null,
+    });
+    setSubmitting(false);
+    if (ok) {
       onClose();
       reset();
     }
@@ -100,7 +129,7 @@ export function GuestRequestSongModal({
         Request a Song
       </div>
       <div className="mb-4 mt-1 text-xs text-muted">
-        Search any song — costs 2 credits to add to the queue
+        Search any song — costs 2 credits and the DJ approves it first
       </div>
 
       {/* tabs */}
@@ -115,6 +144,7 @@ export function GuestRequestSongModal({
           <button
             key={t.id}
             onClick={() => setMode(t.id)}
+            disabled={submitting}
             className={`flex-1 cursor-pointer rounded-lg border px-2 py-2 text-xs font-semibold transition-all ${
               mode === t.id
                 ? "border-neon bg-neon/5 text-neon"
@@ -137,7 +167,7 @@ export function GuestRequestSongModal({
             </span>
             <input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => handleSearch(e.target.value)}
               placeholder={
                 mode === "artist"
                   ? "e.g. Deee-Lite, Madonna, Drake..."
@@ -148,29 +178,56 @@ export function GuestRequestSongModal({
             />
           </div>
           <div className="max-h-[300px] overflow-y-auto">
-            {results.length === 0 && (
+            {query.trim().length < 2 && (
               <div className="py-5 text-center text-[13px] text-muted">
-                No results found
-                <br />
-                <span className="text-[11px]">
-                  Try a different title or artist
-                </span>
+                Search for any song to request
               </div>
             )}
+            {searching && (
+              <div className="py-5 text-center text-[13px] text-muted">
+                Searching…
+              </div>
+            )}
+            {!searching &&
+              query.trim().length >= 2 &&
+              results.length === 0 && (
+                <div className="py-5 text-center text-[13px] text-muted">
+                  No matching songs
+                  <br />
+                  <span className="text-[11px]">
+                    Try a different title or artist
+                  </span>
+                </div>
+              )}
             {results.map((s) => (
               <div
                 key={s.id}
                 className="flex items-center justify-between rounded-lg border-b border-edge px-3.5 py-3 transition-colors active:bg-surface-2"
               >
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{s.title}</div>
-                  <div className="mt-0.5 text-[11px] text-muted">
-                    {s.artist}
+                <div className="flex min-w-0 items-center gap-3">
+                  {s.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={s.image}
+                      alt={s.title}
+                      className="h-9 w-9 shrink-0 rounded-md object-cover"
+                    />
+                  ) : (
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-surface-2 text-lg">
+                      🎵
+                    </span>
+                  )}
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{s.title}</div>
+                    <div className="mt-0.5 text-[11px] text-muted">
+                      {s.artist}
+                    </div>
                   </div>
                 </div>
                 <button
-                  onClick={() => submitCatalog(s.title, s.artist)}
-                  className="ml-2 shrink-0 cursor-pointer rounded-md border border-neon px-3 py-1.5 text-[11px] font-bold text-neon transition active:bg-neon/10"
+                  onClick={() => submitCatalog(s)}
+                  disabled={submitting}
+                  className="ml-2 shrink-0 cursor-pointer rounded-md border border-neon px-3 py-1.5 text-[11px] font-bold text-neon transition active:bg-neon/10 disabled:opacity-50"
                 >
                   +ADD
                 </button>
@@ -215,9 +272,10 @@ export function GuestRequestSongModal({
           </div>
           <button
             onClick={submitFreeform}
-            className="w-full cursor-pointer rounded-[10px] border-none bg-neon-2 px-4 py-3.5 text-[15px] font-bold tracking-[1px] text-white"
+            disabled={submitting}
+            className="w-full cursor-pointer rounded-[10px] border-none bg-neon-2 px-4 py-3.5 text-[15px] font-bold tracking-[1px] text-white disabled:opacity-50"
           >
-            SUBMIT FOR REVIEW — 2 💎
+            {submitting ? "SENDING…" : "SUBMIT FOR REVIEW — 2 💎"}
           </button>
         </div>
       )}

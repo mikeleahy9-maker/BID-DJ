@@ -1,0 +1,18 @@
+-- ----------------------------------------------------------------------------
+-- Stop leaking guests' credit balances to each other.
+--
+-- 20260924000000_guest_attendees_live.sql added "attendees_select_live" so the
+-- event landing page could count attendees. It is a table-level policy, so it
+-- exposed every column of every attendee row of a live event -- including
+-- credit_balance -- to any signed-in guest.
+--
+-- That policy has since been superseded: the landing page's "Guests Bidding"
+-- stat now comes from event_bid_stats(), a security-definer function that
+-- returns aggregates only. Nothing in the app reads the attendees table from a
+-- client any more (the one query that did was fetching the caller's own
+-- balance and was missing its user_id filter).
+--
+-- attendees_select_self_dj already permits a guest to read their own row, so
+-- dropping the broad policy closes the leak without breaking the wallet.
+-- ----------------------------------------------------------------------------
+drop policy if exists "attendees_select_live" on public.attendees;

@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
 import { useToast } from "@/components/ui/use-toast";
 import { getSupabaseClient } from "@/lib/supabase/client";
-import { GUEST_HISTORY } from "../data";
+  import type { GuestDashboardData } from "../lib/guest-events";
 
-/**
+  /**
  * GuestAccountDashboard - faithful port of the prototype's after-login
  * `#screen-find-event` (guest account dashboard).
  *
@@ -16,8 +16,8 @@ import { GUEST_HISTORY } from "../data";
  *
  * Mobile matches the prototype exactly (stacks in prototype order):
  *   Hero     -> Join Tonight (event code + GO + scan-QR fallback)
- *   Credits  -> Saved Credits strip
- *   History  -> Your Event History cards
+ *   Credits  -> Saved Credits strip (real balance for your live event)
+ *   History  -> Your Event History cards (attendees + requests)
  *   Stats    -> Events / Credits Spent / Songs Bid
  *   Account  -> Payment Methods . Notifications . Edit Profile . Log Out
  *
@@ -27,7 +27,7 @@ import { GUEST_HISTORY } from "../data";
  *   History  -> 2-column card grid on the left
  *   Account  -> right rail under the stats
  */
-export function GuestDashboard() {
+export function GuestDashboard({ data }: { data: GuestDashboardData }) {
   const router = useRouter();
   const { show, toastNode } = useToast();
 
@@ -35,6 +35,47 @@ export function GuestDashboard() {
   const [tried, setTried] = useState(false);
   const [checking, setChecking] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [dashboardData, setDashboardData] = useState(data);
+
+  // Real-time subscription for credit balance changes
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+
+    const refreshDashboard = async () => {
+      try {
+        const res = await fetch("/api/guest/dashboard-refresh", {
+          headers: { "Content-Type": "application/json" },
+        });
+        if (res.ok) {
+          const fresh = await res.json();
+          setDashboardData(fresh);
+        }
+      } catch {
+        // Silently ignore - toast will show errors from mutations anyway
+      }
+    };
+
+    // Attendees RLS now limits a guest to their own rows, so this only ever
+    // receives the caller's balance changes (bids, down votes, DJ refunds).
+    const channel = supabase
+      .channel("guest-dashboard-credits")
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "attendees",
+        },
+        () => {
+          refreshDashboard();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -85,13 +126,10 @@ export function GuestDashboard() {
     }
   };
 
-  const spentTotal = GUEST_HISTORY.reduce((n, h) => n + h.spent, 0);
-  const songsTotal = GUEST_HISTORY.reduce((m, h) => m + h.songs, 0);
-
   const stats = [
-    { value: GUEST_HISTORY.length, label: "Events" },
-    { value: spentTotal, label: "Credits Spent" },
-    { value: songsTotal, label: "Songs Bid" },
+    { value: dashboardData.totalEvents, label: "Events" },
+    { value: dashboardData.totalSpent, label: "Credits Spent" },
+    { value: dashboardData.totalSongs, label: "Songs Bid" },
   ];
 
   const accountRows = [
@@ -111,6 +149,14 @@ export function GuestDashboard() {
       onClick: () => show("Profile settings - coming soon"),
     },
   ];
+
+  const openHistoryItem = (item: (typeof dashboardData.history)[number]) => {
+    if (item.status === "live") {
+      router.push(`/request?event=${item.code}`);
+    } else {
+      show("Event history detail coming soon");
+    }
+  };
 
   return (
     <div className="min-h-full">
@@ -143,13 +189,19 @@ export function GuestDashboard() {
                 <input
                   value={eventCode}
                   onChange={(e) => {
-                    setEventCode(e.target.value.toUpperCase());
+                    // Strip whitespace as it is typed so "PROX 1948" becomes
+                    // PROX1948, and uppercase so it matches the stored code.
+                    setEventCode(
+                      e.target.value.replace(/\s+/g, "").toUpperCase()
+                    );
                     setTried(false);
                   }}
                   onKeyDown={(e) => e.key === "Enter" && joinNow()}
-                  maxLength={6}
-                  placeholder="LOFT22"
+                  maxLength={8}
+                  placeholder="PROX1948"
                   aria-label="Event code"
+                  autoComplete="off"
+                  spellCheck={false}
                   className="min-w-0 flex-1 rounded-lg border border-edge bg-surface-2 px-3.5 py-[11px] text-center font-display text-[18px] font-bold tracking-[4px] text-foreground outline-none transition focus:border-neon placeholder:font-sans placeholder:text-sm placeholder:font-normal placeholder:tracking-[2px] placeholder:text-muted"
                 />
                 <button
@@ -194,15 +246,38 @@ export function GuestDashboard() {
                     Saved Credits
                   </div>
                   <div className="font-display text-[32px] leading-none text-neon">
-                    20
+                    {dashboardData.live?.balance ?? dashboardData.totalBalances}
                   </div>
                 </div>
                 <div className="text-right text-[11px] leading-[1.5] text-muted">
-                  Available at
-                  <br />
-                  your next event
+                  {dashboardData.live ? (
+                    <span>
+                      at <span className="text-neon">{dashboardData.live.name}</span>
+                    </span>
+                  ) : dashboardData.history.length ? (
+                    <span>Across your events</span>
+                  ) : (
+                    <span>Join an event to<br />get started</span>
+                  )}
                 </div>
               </div>
+
+              {dashboardData.live && (
+                <button
+                  onClick={() => router.push(`/request?event=${dashboardData.live!.code}`)}
+                  className="flex w-full cursor-pointer items-center justify-between gap-3 rounded-xl border-none bg-[linear-gradient(135deg,#00ffe1,#00c9b1)] px-[18px] py-3.5 text-left text-bg shadow-[0_0_20px_rgba(0,255,225,0.18)] transition-transform active:scale-[0.98]"
+                >
+                  <span>
+                    <span className="block font-display text-[18px] tracking-[1.5px]">
+                      ▶ Jump back in
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-bg/65">
+                      {dashboardData.live.name} is live right now
+                    </span>
+                  </span>
+                  <span className="ml-auto text-xl" aria-hidden>→</span>
+                </button>
+              )}
 
               {/* Your Event History */}
               <section>
@@ -211,34 +286,42 @@ export function GuestDashboard() {
                     🕐 Your Event History
                   </div>
                   <div className="text-[11px] text-muted">
-                    {GUEST_HISTORY.length} events
+                    {dashboardData.history.length} events
                   </div>
                 </div>
 
-                {GUEST_HISTORY.length === 0 && (
+                {dashboardData.history.length === 0 && (
                   <p className="rounded-xl border border-edge bg-surface p-5 text-center text-[13px] text-muted">
                     No events yet — enter a code above to join your first one!
                   </p>
                 )}
 
                 <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-                  {GUEST_HISTORY.map((h) => (
+                  {dashboardData.history.map((h) => (
                     <button
-                      key={h.name + h.date}
-                      onClick={() => show("Event history detail coming soon")}
+                      key={h.eventId}
+                      onClick={() => openHistoryItem(h)}
                       className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-edge bg-surface px-3.5 py-3.5 text-left transition-colors active:border-neon"
                     >
                       <span
                         className="mt-[3px] h-2.5 w-2.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: h.dot }}
+                        style={{
+                          backgroundColor:
+                            h.status === "live" ? "#00ffe1" : h.dot,
+                        }}
                         aria-hidden
                       />
                       <span className="min-w-0 flex-1">
                         <span className="block text-sm font-semibold">
                           {h.name}
                         </span>
-                        <span className="mt-0.5 block text-[11px] text-muted">
-                          {h.dj} · {h.date}
+                        <span
+                          className={`mt-0.5 block text-[11px] ${
+                            h.status === "live" ? "text-neon" : "text-muted"
+                          }`}
+                        >
+                          {h.dj} ·{" "}
+                          {h.status === "live" ? "LIVE NOW" : h.date}
                         </span>
                       </span>
                       <span className="ml-auto text-right">

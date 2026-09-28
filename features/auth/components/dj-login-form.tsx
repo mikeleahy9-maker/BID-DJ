@@ -168,10 +168,16 @@ export default function DJLoginForm() {
             <Field label="Event Code">
               <Input
                 type="text"
-                placeholder="e.g. LOFT22"
+                placeholder="e.g. PROX1948"
                 autoComplete="off"
+                spellCheck={false}
+                maxLength={12}
                 value={helperCode}
-                onChange={(e) => setHelperCode(e.target.value.toUpperCase())}
+                onChange={(e) =>
+                  setHelperCode(
+                    e.target.value.replace(/\s+/g, "").toUpperCase()
+                  )
+                }
               />
             </Field>
 

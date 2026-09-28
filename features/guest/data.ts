@@ -99,3 +99,9 @@ export const GUEST_HISTORY: {
 
 /** Dollar value of a single credit (1 credit = $1). */
 export const CREDIT_VALUE = 1;
+
+/** Credits a guest starts with when they join an event. */
+export const STARTING_CREDITS = 20;
+
+/** Credits charged for each song request. */
+export const REQUEST_COST = 2;

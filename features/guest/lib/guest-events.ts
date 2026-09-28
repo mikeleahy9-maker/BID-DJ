@@ -1,15 +1,36 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { EVENT_PALETTES } from "@/features/dj/data";
+
+const FALLBACK_DOTS = ["#ff6600", "#cc66ff", "#ff2d78"];
+
+function paletteDot(palette: string | null): string {
+  return (
+    EVENT_PALETTES.find((p) => p.id === palette)?.dot ??
+    FALLBACK_DOTS[
+      Math.abs(hashString(palette ?? "noir")) % FALLBACK_DOTS.length
+    ]
+  );
+}
+
+function hashString(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = (hash << 5) - hash + input.charCodeAt(i);
+    hash |= 0;
+  }
+  return hash;
+}
 
 export interface GuestEventView {
+  id: string;
   code: string;
   name: string;
   djName: string;
   badge: string;
   meta: string;
   queueCount: number;
-  guestCount: number;
-  topTitle: string;
-  topArtist: string;
+  guestsBidding: number;
+  top: { title: string; artist: string; credits: number } | null;
 }
 
 function dateBadge(input: string | null): string {
@@ -60,24 +81,28 @@ export async function getLiveEventForGuest(
   if (!event) return null;
 
   const { count: queueCount } = await supabase
-    .from("requests")
+    .from("event_tracks")
     .select("id", { count: "exact", head: true })
     .eq("event_id", event.id)
-    .in("status", ["pending", "playing"]);
+    .in("status", ["queued", "playing"]);
 
-  const { count: guestCount } = await supabase
-    .from("attendees")
-    .select("id", { count: "exact", head: true })
-    .eq("event_id", event.id);
-
-  const { data: top } = await supabase
-    .from("requests")
-    .select("song_title, song_artist, tip_amount")
+  const top = await supabase
+    .from("event_tracks")
+    .select("title, artist, credits")
     .eq("event_id", event.id)
-    .in("status", ["pending", "playing"])
-    .order("tip_amount", { ascending: false })
+    .in("status", ["queued", "playing"])
+    .order("credits", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
+
+  // Same source as the client hook, so the number doesn't change on first
+  // refresh. Counts real bids (up or down), not song requests.
+  const { data: bidStats } = await supabase.rpc("event_bid_stats", {
+    p_event_id: event.id,
+  });
+  const guestsBidding = Number(
+    (bidStats as { voters?: number } | null)?.voters ?? 0
+  );
 
   const location = event.venue || event.city || "";
   const time = timeLabel(event.event_time);
@@ -88,16 +113,111 @@ export async function getLiveEventForGuest(
   const meta = metaParts.length ? metaParts.join("  ") : "📍 Live event · TBD";
 
   return {
+    id: event.id,
     code: event.code,
     name: event.name,
     djName: event.act || "DJ",
     badge: `🎉 ${dateBadge(event.event_date)}`,
     meta,
     queueCount: queueCount ?? 0,
-    guestCount: guestCount ?? 0,
-    topTitle: top?.song_title ?? "No songs yet",
-    topArtist: top
-      ? `${top.song_artist || "Unknown artist"} · ${Math.round(Number(top.tip_amount))} credits`
-      : "Be the first to request a song",
+    guestsBidding,
+    top:
+      top.data && "title" in top.data
+        ? {
+            title: top.data.title,
+            artist: top.data.artist,
+            credits: Number(top.data.credits ?? 0),
+          }
+        : null,
+  };
+}
+
+/**
+ * Guest enters the queue for a live event: idempotently creates their
+ * attendees row and grants starting credits on first join.
+ */
+export async function joinEventAsGuest(eventId: string): Promise<boolean> {
+  const supabase = await getSupabaseServerClient();
+  const { error } = await supabase.rpc("join_event_credits", {
+    p_event_id: eventId,
+  });
+  return !error;
+}
+
+export interface GuestHistoryEvent {
+  eventId: string;
+  code: string;
+  name: string;
+  dj: string;
+  date: string;
+  status: string;
+  spent: number;
+  songs: number;
+  credits: number;
+  dot: string;
+}
+
+export interface GuestDashboardData {
+  history: GuestHistoryEvent[];
+  totalEvents: number;
+  totalSpent: number;
+  totalSongs: number;
+  live: { code: string; name: string; balance: number } | null;
+  totalBalances: number;
+}
+
+function monthDayYear(input: string | null): string {
+  if (!input) return "";
+  const parsed = new Date(`${input}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+interface GuestMyEventsRow {
+  event_id: string;
+  code: string;
+  name: string;
+  act: string | null;
+  event_date: string | null;
+  status: string;
+  palette: string | null;
+  credit_balance: number | string;
+  spent: number | string;
+  songs: number | string;
+}
+
+/** Guest dashboard data — every event joined, their credits + spend per event. */
+export async function getGuestDashboardData(): Promise<GuestDashboardData> {
+  const supabase = await getSupabaseServerClient();
+  const { data: rows } = await supabase.rpc("guest_my_events");
+
+  const history: GuestHistoryEvent[] = ((rows as GuestMyEventsRow[] | null) ?? []).map(
+    (r) => ({
+      eventId: r.event_id,
+      code: r.code,
+      name: r.name,
+      dj: r.act || "DJ",
+      date: monthDayYear(r.event_date),
+      status: r.status,
+      spent: Number(r.spent ?? 0),
+      songs: Number(r.songs ?? 0),
+      credits: Number(r.credit_balance ?? 0),
+      dot: paletteDot(r.palette),
+    })
+  );
+
+  const live = history.find((h) => h.status === "live") ?? null;
+
+  return {
+    history,
+    totalEvents: history.length,
+    totalSpent: history.reduce((n, h) => n + h.spent, 0),
+    totalSongs: history.reduce((n, h) => n + h.songs, 0),
+    live: live ? { code: live.code, name: live.name, balance: live.credits } : null,
+    totalBalances: history.reduce((n, h) => n + h.credits, 0),
   };
 }

@@ -2,7 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAppUrl } from "@/lib/app-url";
 import { readHelperSession } from "@/lib/helper-session";
+import { getSupabaseServerClient } from "@/lib/supabase/server";
 import QueueManager from "@/features/dj/components/queue-manager";
+import {
+  EVENT_PROJECTION,
+  gigDateLabel,
+  gigTimeLabel,
+  type DbEventRow,
+} from "@/features/dj/lib/dj-events";
 
 export const metadata = { title: "Helper Queue" };
 
@@ -11,6 +18,29 @@ export default async function HelperQueuePage() {
   if (!helper) {
     redirect("/dj-login");
   }
+
+  const supabase = await getSupabaseServerClient();
+  const { data } = await supabase
+    .from("events")
+    .select(EVENT_PROJECTION)
+    .eq("code", helper.code)
+    .eq("status", "live")
+    .limit(1);
+  const liveEvent = data && data.length > 0 ? (data[0] as unknown as DbEventRow) : null;
+
+  const eventContext = liveEvent
+    ? {
+        id: liveEvent.id,
+        name: liveEvent.name,
+        act: liveEvent.act ?? "",
+        date: gigDateLabel(liveEvent.event_date),
+        time: gigTimeLabel(liveEvent.event_time),
+        venue: liveEvent.venue ?? "",
+        code: liveEvent.code,
+        pin: liveEvent.pin ?? "",
+        helperPin: liveEvent.helper_pin ?? "",
+      }
+    : null;
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-5 px-4 py-6">
@@ -32,7 +62,7 @@ export default async function HelperQueuePage() {
 
       <QueueManager
         appUrl={getAppUrl()}
-        eventContext={{ name: helper.name, code: helper.code }}
+        eventContext={eventContext}
         helperMode
       />
     </main>

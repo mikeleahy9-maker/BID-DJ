@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
 import { GuestHireModal } from "./guest-hire-modal";
+import { useGuestBoard } from "../lib/use-guest-board";
 
 /**
  * GuestEventPage - faithful port of the prototype's `#screen-event`
@@ -18,6 +19,9 @@ import { GuestHireModal } from "./guest-hire-modal";
  *
  * On `md+` it adapts to a web layout: stats become a full-width KPI row,
  * with the queue CTA on the left and the hire card in a right rail.
+ *
+ * The stats and 🔥 Top of Queue are live: useGuestBoard subscribes to
+ * event_tracks + requests changes for this event.
  */
 export function GuestEventPage({
   eventCode,
@@ -25,22 +29,28 @@ export function GuestEventPage({
 }: {
   eventCode: string;
   event: {
+    id: string;
     badge: string;
     name: string;
     djName: string;
     meta: string;
     queueCount: number;
-    guestCount: number;
-    topTitle: string;
-    topArtist: string;
+    guestsBidding: number;
+    top: { title: string; artist: string; credits: number } | null;
   };
 }) {
   const router = useRouter();
   const [hireOpen, setHireOpen] = useState(false);
 
+  const { queueCount, guestsBidding, top } = useGuestBoard(event.id, {
+    queueCount: event.queueCount,
+    guestsBidding: event.guestsBidding,
+    top: event.top,
+  });
+
   const stats = [
-    { value: `${event.queueCount}`, label: "Songs in Queue" },
-    { value: `${event.guestCount}`, label: "Guests Bidding" },
+    { value: `${queueCount}`, label: "Songs in Queue" },
+    { value: `${guestsBidding}`, label: "Guests Bidding" },
     { value: "💎", label: "Live Now" },
   ];
 
@@ -108,9 +118,13 @@ export function GuestEventPage({
               <div className="mb-1.5 text-[10px] uppercase tracking-[2px] text-neon-3">
                 🔥 Top of Queue
               </div>
-              <div className="text-base font-bold">{event.topTitle}</div>
+              <div className="text-base font-bold">
+                {top?.title ?? "No songs yet"}
+              </div>
               <div className="mt-0.5 text-xs text-muted">
-                {event.topArtist}
+                {top
+                  ? `${top.artist} · ${top.credits} credits`
+                  : "Be the first to request a song"}
               </div>
             </div>
 
