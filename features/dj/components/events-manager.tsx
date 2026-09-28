@@ -39,6 +39,7 @@ export default function EventsManager({
   const [events, setEvents] = useState<DJEvent[]>(initialEvents);
   const [showCreate, setShowCreate] = useState(false);
   const [goingLiveId, setGoingLiveId] = useState<string | null>(null);
+  const liveExists = events.some((ev) => ev.status === "live");
 
   const goLive = async (id: string) => {
     setGoingLiveId(id);
@@ -195,6 +196,11 @@ export default function EventsManager({
             </button>
           </div>
           <div className="flex flex-col gap-2.5">
+            {liveExists && (
+              <p className="flex items-center gap-2 rounded-lg border border-neon-2/40 bg-neon-2/10 px-3 py-2 text-[11px] font-semibold text-neon-2">
+                ● One gig is live — other gigs can&apos;t go live until it ends
+              </p>
+            )}
             {events.length === 0 && (
               <p className="rounded-xl border border-dashed border-edge bg-surface/60 p-6 text-center text-sm text-muted">
                 No upcoming gigs yet — hit &quot;+ New Event&quot; to create your first one
@@ -219,14 +225,16 @@ export default function EventsManager({
                     ⚙ Setup & QR
                   </Link>
                   <button
-                    disabled={goingLiveId === ev.id}
+                    disabled={goingLiveId === ev.id || liveExists}
                     onClick={() => goLive(ev.id)}
                     className={[
                       "flex-1 rounded-lg border px-3 py-2 text-center text-[11px] font-bold transition",
                       ev.status === "live"
                         ? "border-neon-2 bg-neon-2/10 text-neon-2"
                         : "border-neon-2 text-neon-2 hover:bg-neon-2/10",
-                      goingLiveId === ev.id ? "opacity-60" : "",
+                      goingLiveId === ev.id || (liveExists && ev.status !== "live")
+                        ? "opacity-60"
+                        : "",
                     ].join(" ")}
                   >
                     {goingLiveId === ev.id

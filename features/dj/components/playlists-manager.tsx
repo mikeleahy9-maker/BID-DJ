@@ -19,7 +19,11 @@ export default function PlaylistsManager({
 }) {
   const { show, toastNode } = useToast();
   const [playlists, setPlaylists] = useState<SavedPlaylist[]>(initialPlaylists);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+
+  const viewingPl = viewingId
+    ? playlists.find((p) => p.id === viewingId) ?? null
+    : null;
 
   // Create / edit modal
   const [showForm, setShowForm] = useState(false);
@@ -125,7 +129,7 @@ export default function PlaylistsManager({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Could not delete the playlist");
       setPlaylists((prev) => prev.filter((p) => p.id !== id));
-      if (expandedId === id) setExpandedId(null);
+      if (viewingId === id) setViewingId(null);
       if (addingTo?.id === id) setAddingTo(null);
       show("Playlist deleted");
     } catch (err) {
@@ -311,6 +315,72 @@ export default function PlaylistsManager({
     }
   };
 
+  const renderSong = (pl: SavedPlaylist, s: SeedSong) => (
+    <div
+      key={s.id}
+      className="flex items-center gap-3 rounded-lg border border-edge bg-surface-2 px-3 py-2 transition-colors hover:border-neon/30"
+    >
+      {s.image ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={s.image}
+          alt={s.title}
+          className="h-8 w-8 rounded object-cover"
+        />
+      ) : (
+        <span
+          aria-hidden
+          className="flex h-8 w-8 items-center justify-center rounded bg-surface text-lg"
+        >
+          🎵
+        </span>
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold">{s.title}</div>
+        <div className="truncate text-[11px] text-muted">{s.artist}</div>
+      </div>
+      <div className="flex shrink-0 items-center rounded-lg border border-edge bg-surface p-0.5">
+        <button
+          aria-label={`Reduce credits for ${s.title}`}
+          onClick={() => bumpCredits(pl, s, -1)}
+          className="flex h-6 w-6 items-center justify-center rounded text-sm text-muted transition hover:text-neon-3"
+        >
+          −
+        </button>
+        <span aria-hidden className="px-0.5 text-[10px]">
+          💎
+        </span>
+        <input
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          aria-label={`Credits for ${s.title}`}
+          value={creditDrafts[trackKey(s)] ?? String(s.credits)}
+          onChange={(e) => onCreditInput(pl, s, e.target.value)}
+          onBlur={() => commitCreditInput(pl, s)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+          className="w-[42px] bg-transparent text-center text-[12px] font-bold text-neon-3 outline-none"
+        />
+        <button
+          aria-label={`Increase credits for ${s.title}`}
+          onClick={() => bumpCredits(pl, s, 1)}
+          className="flex h-6 w-6 items-center justify-center rounded text-sm text-muted transition hover:text-neon-3"
+        >
+          +
+        </button>
+      </div>
+      <button
+        aria-label={`Remove ${s.title}`}
+        onClick={() => removeSong(pl, s)}
+        className="px-1 text-muted transition hover:text-neon-2"
+      >
+        ✕
+      </button>
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -333,7 +403,7 @@ export default function PlaylistsManager({
       {playlists.length === 0 && (
         <p className="rounded-xl border border-dashed border-edge bg-surface/60 p-8 text-center text-sm text-muted">
           No playlists yet — hit &quot;+ New Playlist&quot; to build your first
-          one, then add songs from Deezer.
+          one, then add songs.
         </p>
       )}
 
@@ -341,30 +411,24 @@ export default function PlaylistsManager({
         {playlists.map((pl) => (
           <div
             key={pl.id}
-            className="rounded-xl border border-edge bg-surface p-4 transition-colors"
+            className="flex flex-col gap-3 rounded-xl border border-edge bg-surface p-4 transition-colors hover:border-neon/40"
           >
             <div className="flex items-center gap-3">
-              <button
-                onClick={() =>
-                  setExpandedId((prev) => (prev === pl.id ? null : pl.id))
-                }
-                className="flex min-w-0 flex-1 items-center gap-3 text-left"
+              <span
+                aria-hidden
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-2 text-2xl"
               >
-                <span
-                  aria-hidden
-                  className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-2 text-2xl"
-                >
-                  {pl.icon}
-                </span>
-                <span className="min-w-0">
-                  <span className="block truncate font-display text-base tracking-[1px]">
-                    {pl.name}
-                  </span>
-                  <span className="block text-[11px] text-muted">
-                    {pl.songs.length} {pl.songs.length === 1 ? "song" : "songs"}
-                  </span>
-                </span>
-              </button>
+                {pl.icon}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-display text-base tracking-[1px]">
+                  {pl.name}
+                </div>
+                <div className="text-[11px] text-muted">
+                  {pl.songs.length}{" "}
+                  {pl.songs.length === 1 ? "song" : "songs"}
+                </div>
+              </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 <button
                   aria-label={`Edit ${pl.name}`}
@@ -392,95 +456,12 @@ export default function PlaylistsManager({
                 )}
               </div>
             </div>
-
-            {expandedId === pl.id && (
-              <div className="mt-3 flex flex-col gap-2 border-t border-edge pt-3">
-                {pl.songs.length === 0 && (
-                  <p className="text-[11px] text-muted">
-                    No songs yet — add some below.
-                  </p>
-                )}
-                {pl.songs.map((s) => (
-                  <div
-                    key={s.id}
-                    className="flex items-center gap-3 rounded-lg bg-surface-2 px-3 py-2"
-                  >
-                    {s.image ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={s.image}
-                        alt={s.title}
-                        className="h-8 w-8 rounded object-cover"
-                      />
-                    ) : (
-                      <span
-                        aria-hidden
-                        className="flex h-8 w-8 items-center justify-center rounded bg-surface text-lg"
-                      >
-                        🎵
-                      </span>
-                    )}
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-semibold">
-                        {s.title}
-                      </div>
-                      <div className="truncate text-[11px] text-muted">
-                        {s.artist}
-                      </div>
-                    </div>
-                    <div className="flex shrink-0 items-center rounded-lg border border-edge bg-surface p-0.5">
-                      <button
-                        aria-label={`Reduce credits for ${s.title}`}
-                        onClick={() => bumpCredits(pl, s, -1)}
-                        className="flex h-6 w-6 items-center justify-center rounded text-sm text-muted transition hover:text-neon-3"
-                      >
-                        −
-                      </button>
-                      <span aria-hidden className="px-0.5 text-[10px]">
-                        💎
-                      </span>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        aria-label={`Credits for ${s.title}`}
-                        value={creditDrafts[trackKey(s)] ?? String(s.credits)}
-                        onChange={(e) => onCreditInput(pl, s, e.target.value)}
-                        onBlur={() => commitCreditInput(pl, s)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") e.currentTarget.blur();
-                        }}
-                        className="w-[42px] bg-transparent text-center text-[12px] font-bold text-neon-3 outline-none"
-                      />
-                      <button
-                        aria-label={`Increase credits for ${s.title}`}
-                        onClick={() => bumpCredits(pl, s, 1)}
-                        className="flex h-6 w-6 items-center justify-center rounded text-sm text-muted transition hover:text-neon-3"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <button
-                      aria-label={`Remove ${s.title}`}
-                      onClick={() => removeSong(pl, s)}
-                      className="px-1 text-muted transition hover:text-neon-2"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={() => {
-                    setAddingTo(pl);
-                    setSearchQuery("");
-                    setSearchResults([]);
-                  }}
-                  className="self-start rounded-lg border border-neon px-3 py-1.5 text-[11px] font-bold text-neon transition hover:bg-neon/10"
-                >
-                  ➕ Add songs
-                </button>
-              </div>
-            )}
+            <button
+              onClick={() => setViewingId(pl.id)}
+              className="mt-auto flex w-full items-center justify-center gap-2 rounded-lg border border-edge bg-surface-2 px-3 py-2 text-[11px] font-bold text-foreground transition hover:border-neon hover:text-neon"
+            >
+              View playlist
+            </button>
           </div>
         ))}
       </div>
@@ -547,6 +528,57 @@ export default function PlaylistsManager({
         </button>
       </Modal>
 
+      {/* ---- View playlist modal ---- */}
+      <Modal open={!!viewingPl} onClose={() => setViewingId(null)} sheet>
+        {viewingPl && (
+          <>
+            <button
+              aria-label="Close"
+              onClick={() => setViewingId(null)}
+              className="absolute right-5 top-4 text-xl text-muted transition-colors hover:text-foreground"
+            >
+              ✕
+            </button>
+            <div className="mb-1.5 flex items-center gap-3 font-display text-[30px] tracking-[2px]">
+              <span aria-hidden>{viewingPl.icon}</span>
+              <span className="truncate">{viewingPl.name}</span>
+            </div>
+            <p className="mb-[18px] text-xs text-muted">
+              {viewingPl.songs.length}{" "}
+              {viewingPl.songs.length === 1 ? "song" : "songs"} · load this
+              playlist into any event&apos;s seed list
+            </p>
+
+            <div className="flex max-h-72 flex-col gap-2 overflow-y-auto pr-0.5">
+              {viewingPl.songs.length === 0 && (
+                <p className="rounded-lg border border-dashed border-edge bg-surface/60 p-6 text-center text-xs text-muted">
+                  No songs yet — add some.
+                </p>
+              )}
+              {viewingPl.songs.map((s) => renderSong(viewingPl, s))}
+            </div>
+
+            <button
+              onClick={() => {
+                setAddingTo(viewingPl);
+                setSearchQuery("");
+                setSearchResults([]);
+              }}
+              className="mt-4 w-full rounded-xl border border-dashed border-neon px-4 py-3 text-center text-sm font-bold text-neon transition hover:bg-neon/10"
+            >
+              ➕ Add songs
+            </button>
+
+            <button
+              onClick={() => setViewingId(null)}
+              className="mt-3 w-full rounded-xl border border-edge px-4 py-3 text-center text-sm font-bold text-muted transition hover:text-foreground"
+            >
+              Done
+            </button>
+          </>
+        )}
+      </Modal>
+
       {/* ---- Add songs modal ---- */}
       <Modal open={!!addingTo} onClose={() => setAddingTo(null)} sheet>
         <button
@@ -561,13 +593,13 @@ export default function PlaylistsManager({
         </div>
         <p className="mb-[22px] text-xs text-muted">
           {addingTo
-            ? `Search Deezer to add tracks to "${addingTo.name}".`
-            : "Search Deezer for songs."}
+            ? `Search to add tracks to "${addingTo.name}".`
+            : "Search for songs."}
         </p>
 
         <input
           className={inputCls}
-          placeholder="Search Deezer for songs..."
+          placeholder="Search for songs..."
           value={searchQuery}
           onChange={(e) => handleSearch(e.target.value)}
           autoFocus

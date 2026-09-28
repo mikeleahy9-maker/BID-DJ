@@ -453,7 +453,7 @@ export default function QueueManager({
         <p className="mb-4 text-xs text-muted">Pre-load a song with starter credits</p>
         <input
           className="w-full rounded-lg border border-edge bg-surface-2 px-3.5 py-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted focus:border-neon"
-          placeholder="Search Deezer for songs to seed..."
+          placeholder="Search for songs to seed..."
           value={seedQuery}
           onChange={(e) => handleSeedSearch(e.target.value)}
           autoFocus
@@ -502,13 +502,13 @@ export default function QueueManager({
             </button>
           ))}
           {seedSearching && (
-            <p className="py-3 text-center text-xs text-muted">Searching Deezer…</p>
+            <p className="py-3 text-center text-xs text-muted">Searching…</p>
           )}
           {!seedSearching && seedQuery.trim().length >= 2 && seedResults.length === 0 && (
             <p className="py-3 text-center text-xs text-muted">No matching songs</p>
           )}
           {seedQuery.trim().length < 2 && (
-            <p className="py-3 text-center text-xs text-muted">Start typing to search Deezer</p>
+            <p className="py-3 text-center text-xs text-muted">Start typing to search</p>
           )}
         </div>
       </Modal>

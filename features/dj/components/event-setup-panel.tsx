@@ -762,7 +762,7 @@ export default function EventSetupPanel({
         <p className="mb-4 text-xs text-muted">Pre-load a song with starter credits</p>
         <input
           className={inputCls}
-          placeholder="Search Deezer for songs to seed..."
+          placeholder="Search for songs to seed..."
           value={seedQuery}
           onChange={(e) => handleSeedSearch(e.target.value)}
           autoFocus
@@ -811,13 +811,13 @@ export default function EventSetupPanel({
             </button>
           ))}
           {seedSearching && (
-            <p className="py-3 text-center text-xs text-muted">Searching Deezer…</p>
+            <p className="py-3 text-center text-xs text-muted">Searching…</p>
           )}
           {!seedSearching && seedQuery.trim().length >= 2 && seedResults.length === 0 && (
-            <p className="py-3 text-center text-xs text-muted">No matching songs on Deezer</p>
+            <p className="py-3 text-center text-xs text-muted">No matching songs</p>
           )}
           {seedQuery.trim().length < 2 && (
-            <p className="py-3 text-center text-xs text-muted">Start typing to search Deezer</p>
+            <p className="py-3 text-center text-xs text-muted">Start typing to search</p>
           )}
         </div>
       </Modal>
