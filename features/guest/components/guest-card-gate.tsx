@@ -45,11 +45,25 @@ export function GuestCardGate() {
     };
   }, []);
 
-  const handleSaved = async ({ setupIntentId }: { setupIntentId: string }) => {
+  const handleSaved = async ({
+    setupIntentId,
+    billing,
+  }: {
+    setupIntentId: string;
+    billing: {
+      name: string;
+      line1: string;
+      line2: string;
+      city: string;
+      state: string;
+      postalCode: string;
+      country: string;
+    } | null;
+  }) => {
     const res = await fetch("/api/guest/confirm-card", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ setupIntentId }),
+      body: JSON.stringify({ setupIntentId, billing }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -130,6 +144,7 @@ export function GuestCardGate() {
               clientSecret={clientSecret}
               returnUrl={origin ? `${origin}/dashboard` : undefined}
               elementClassName=""
+              collectBillingDetails
               onSaved={handleSaved}
               footer="Your card is saved securely via Stripe. You are only charged when you buy credits."
             />

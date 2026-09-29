@@ -16,6 +16,13 @@ import { getCurrentUser } from "@/lib/supabase/server";
  * The SetupIntent is re-fetched server-side and its metadata.user_id must match
  * the caller — the client's claims are never trusted. The webhook handler
  * performs the same update idempotently, so both paths converge.
+ *
+ * The billing address (name + country) is collected by the Address Element in
+ * CardSetupForm and stored on the PaymentMethod itself. India-registered Stripe
+ * accounts treat a charge to a US-issued card as an export transaction; those
+ * regulatory rules require a customer name, a billing address with a 2-letter
+ * ISO country code, and a description on the charge, so the address must live on
+ * the saved payment method (not only in a local column).
  */
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();

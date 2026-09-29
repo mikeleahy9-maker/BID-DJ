@@ -6,6 +6,7 @@ import type {
   Stripe,
   StripeElements,
   StripePaymentElement,
+  StripeAddressElement,
 } from "@stripe/stripe-js";
 import { STRIPE_APPEARANCE, STRIPE_PK } from "@/lib/stripe-client";
 
@@ -25,7 +26,29 @@ interface CardSetupFormProps {
    * directly in a form card so it doesn't look like nested boxes.
    */
   elementClassName?: string;
-  onSaved: (result: { setupIntentId: string }) => Promise<void> | void;
+  /**
+   * Collect a billing address alongside the card. Required for India-registered
+   * Stripe accounts: charging a non-India-issued card is an export transaction,
+   * and modest Indian regulations force with the charge: the customer's name,
+   * a billing address with a 2-letter ISO country, and a description. The
+   * address is attached to the saved PaymentMethod on confirm so off-session
+   * charges pass Stripe's export checks automatically.
+   */
+  collectBillingDetails?: boolean;
+  /** Prefill the billing "name" field (known at signup, empty on re-save). */
+  defaultBillingName?: string;
+  onSaved: (result: {
+    setupIntentId: string;
+    billing: {
+      name: string;
+      line1: string;
+      line2: string;
+      city: string;
+      state: string;
+      postalCode: string;
+      country: string;
+    } | null;
+  }) => Promise<void> | void;
 }
 
 /**
@@ -40,12 +63,16 @@ export function CardSetupForm({
   submitLabel = "SAVE CARD →",
   footer,
   elementClassName = "rounded-lg border border-edge bg-surface-2 px-[14px] py-[11px]",
+  collectBillingDetails = false,
+  defaultBillingName = "",
   onSaved,
 }: CardSetupFormProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const billingContainerRef = useRef<HTMLDivElement | null>(null);
   const stripeRef = useRef<Stripe | null>(null);
   const elementsRef = useRef<StripeElements | null>(null);
   const paymentElementRef = useRef<StripePaymentElement | null>(null);
+  const billingAddressElementRef = useRef<StripeAddressElement | null>(null);
   const [ready, setReady] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [cardError, setCardError] = useState<string | null>(null);
@@ -72,6 +99,24 @@ export function CardSetupForm({
           clientSecret,
           appearance: STRIPE_APPEARANCE,
         });
+
+        if (collectBillingDetails && billingContainerRef.current) {
+          const billingElement = elements.create("address", {
+            mode: "billing",
+            fields: {
+              // Name and country are the fields Indian export rules require.
+              name: "auto",
+            },
+            defaultValues: {
+              name: defaultBillingName,
+            },
+          });
+          if (billingContainerRef.current) {
+            billingElement.mount(billingContainerRef.current);
+          }
+          billingAddressElementRef.current = billingElement;
+        }
+
         const paymentElement = elements.create("payment");
         stripeRef.current = stripe;
         elementsRef.current = elements;
@@ -95,10 +140,14 @@ export function CardSetupForm({
         paymentElementRef.current.destroy();
         paymentElementRef.current = null;
       }
+      if (billingAddressElementRef.current) {
+        billingAddressElementRef.current.destroy();
+        billingAddressElementRef.current = null;
+      }
       elementsRef.current = null;
       stripeRef.current = null;
     };
-  }, [clientSecret, attempt]);
+  }, [clientSecret, attempt, collectBillingDetails, defaultBillingName]);
 
   const handleConfirm = async (e: FormEvent) => {
     e.preventDefault();
@@ -122,7 +171,8 @@ export function CardSetupForm({
         setAttempt((a) => a + 1);
       } else {
         const setupIntentId = result.setupIntent?.id ?? "";
-        await onSaved({ setupIntentId });
+        const billing = await getBillingFromElement();
+        await onSaved({ setupIntentId, billing });
       }
     } catch (err) {
       setCardError(
@@ -135,8 +185,47 @@ export function CardSetupForm({
     }
   };
 
+  const getBillingFromElement = async () => {
+    const addressElement = billingAddressElementRef.current;
+    if (!addressElement) return null;
+    try {
+      const { complete, value } = await addressElement.getValue();
+      if (!complete || !value) return null;
+      const name = value.name ?? "";
+      const a = value.address ?? {};
+      return {
+        name,
+        line1: a.line1 ?? "",
+        line2: a.line2 ?? "",
+        city: a.city ?? "",
+        state: a.state ?? "",
+        postalCode: a.postal_code ?? "",
+        country: a.country ?? "",
+      };
+    } catch {
+      return null;
+    }
+  };
+
   return (
     <form className="mb-3.5 flex flex-col gap-3.5" onSubmit={handleConfirm} noValidate>
+      {collectBillingDetails && (
+        <>
+          <div className="my-1 flex items-center gap-3">
+            <span className="h-px flex-1 bg-edge" />
+            <span className="text-[11px] uppercase tracking-[1px] text-muted">
+              Billing address
+            </span>
+            <span className="h-px flex-1 bg-edge" />
+          </div>
+
+          <div
+            ref={billingContainerRef}
+            className={elementClassName}
+          />
+        </>
+      )}
+
       <div className="my-1 flex items-center gap-3">
         <span className="h-px flex-1 bg-edge" />
         <span className="text-[11px] uppercase tracking-[1px] text-muted">

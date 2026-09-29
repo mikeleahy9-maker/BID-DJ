@@ -11,6 +11,16 @@ import { LiveBoard } from "@/features/live/components/live-board";
 import { useLiveQueue, type LiveTrack } from "@/features/live/lib/use-live-queue";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
+/** Row shape returned by the event_finance() RPC. All money figures are cents. */
+interface EventFinance {
+  total_revenue_cents: number;
+  purchase_count: number;
+  purchaser_count: number;
+  organizer_cents: number;
+  dj_cents: number;
+  platform_cents: number;
+}
+
 export default function QueueManager({
   appUrl,
   eventContext,
@@ -63,21 +73,40 @@ export default function QueueManager({
     refundTrack,
   } = useLiveQueue(eventContext?.id ?? "");
 
+  /**
+   * Money for the event comes from credit PURCHASES, not from board activity.
+   *
+   * event_finance() reads revenue_cents from credit_purchases, so it correctly
+   * excludes bonus credits (a $20 pack grants 23) and excludes refunded bids
+   * (a bid refund returns credits but never refunds the money the guest already
+   * paid). Summing board credits would do neither, and would miss guests who
+   * bought credits and never bid.
+   */
+  const [finance, setFinance] = useState<EventFinance | null>(null);
+
+  useEffect(() => {
+    const eventId = eventContext?.id;
+    if (!eventId) return;
+    let ignore = false;
+    (async () => {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase.rpc("event_finance", { p_event_id: eventId });
+      if (ignore || !data) return;
+      const row = Array.isArray(data) ? data[0] : data;
+      if (row) setFinance(row as EventFinance);
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, [eventContext?.id, tracks.length]);
+
+  const collected = (finance?.total_revenue_cents ?? 0) / 100;
+  const organizerCut = (finance?.organizer_cents ?? 0) / 100;
+  const djCut = (finance?.dj_cents ?? 0) / 100;
+  const bidabeatCut = (finance?.platform_cents ?? 0) / 100;
   const playedTracks = tracks.filter((t) => t.status === "played");
-  const earned =
-    playedTracks.reduce((sum, t) => sum + Number(t.credits || 0), 0) *
-    PRICING.CREDIT_VALUE;
   const songsPlayed = playedTracks.length;
   const boardCount = tracks.filter((t) => t.status !== "played").length;
-
-  const totalCredits = tracks.reduce(
-    (sum, t) => sum + Number(t.credits || 0),
-    0
-  );
-  const totalCollected = totalCredits * PRICING.CREDIT_VALUE;
-  const djCut = totalCollected * PRICING.DJ_PCT;
-  const organizerCut = totalCollected * PRICING.ORGANIZER_PCT;
-  const bidabeatCut = totalCollected * PRICING.BIDABEAT_PCT;
 
   const runQueueAction = async (message: string, fn: () => Promise<void>) => {
     try {
@@ -280,13 +309,21 @@ export default function QueueManager({
         }`}
       >
         <div>
-          <div className="text-[11px] uppercase tracking-[1px] text-muted">Tonight&apos;s Earnings</div>
+          <div className="text-[11px] uppercase tracking-[1px] text-muted">Collected Tonight</div>
           <div className={`font-display text-5xl tracking-[2px] ${helperMode ? "text-muted" : "text-neon"}`}>
-            {helperMode ? "—" : `$${earned.toFixed(2)}`}
+            {helperMode ? "—" : `$${collected.toFixed(2)}`}
           </div>
           <div className="mt-1 text-xs text-muted">
+            {finance?.purchaser_count ?? 0} guest
+            {(finance?.purchaser_count ?? 0) !== 1 && "s"} bought credits ·{" "}
             {songsPlayed} song{songsPlayed !== 1 && "s"} played
           </div>
+          {!helperMode && collected > 0 && (
+            <div className="mt-2 text-[11px] text-muted">
+              Splits at close: organizer ${organizerCut.toFixed(2)} · DJ $
+              {djCut.toFixed(2)} · BidaBeat ${bidabeatCut.toFixed(2)}
+            </div>
+          )}
         </div>
         <div className="ml-auto flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <button
@@ -406,10 +443,10 @@ export default function QueueManager({
         </section>
       )}
 
-      {/* Played & banked */}
+      {/* Played */}
       <section>
         <h2 className="mb-3 text-[11px] uppercase tracking-[2px] text-muted">
-          ✅ Played & Banked
+          ✅ Played
         </h2>
         <div className="overflow-hidden rounded-xl border border-edge bg-surface">
           {playedTracks.length === 0 && (
@@ -424,8 +461,11 @@ export default function QueueManager({
                 🎵 {t.title} — {t.artist}
               </span>
               {!helperMode && (
+                // Credits, not dollars: board credits are gameplay value and
+                // include bonus credits and the DJ's own seed, so multiplying
+                // by CREDIT_VALUE here overstated the money by up to 3x.
                 <span className="shrink-0 pl-3 text-[13px] font-semibold text-neon">
-                  +${(Number(t.credits || 0) * PRICING.CREDIT_VALUE).toFixed(2)}
+                  {Number(t.credits || 0)} credits
                 </span>
               )}
             </div>
@@ -525,28 +565,34 @@ export default function QueueManager({
 
       {/* ---- Charge breakdown ---- */}
       <Modal open={showEndCharge} onClose={() => setShowEndCharge(false)}>
-        <div className="mb-1 font-display text-2xl tracking-[2px]">Charges to Process</div>
+        <div className="mb-1 font-display text-2xl tracking-[2px]">Settlement Preview</div>
         <p className="mb-4 text-xs text-muted">
-          ${totalCollected.toFixed(2)} from {totalCredits.toLocaleString()} credits on the board
+          ${collected.toFixed(2)} collected from {finance?.purchase_count ?? 0} credit
+          purchase{(finance?.purchase_count ?? 0) !== 1 && "s"}
         </p>
         <div className="mb-5 rounded-lg border border-neon/20 bg-neon/5 p-3 text-sm">
           <div className="flex justify-between py-0.5">
             <span className="text-muted">Total collected</span>
-            <span className="font-semibold">${totalCollected.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between py-0.5">
-            <span className="text-muted">DJ share (20%)</span>
-            <span className="font-semibold text-neon">${djCut.toFixed(2)}</span>
+            <span className="font-semibold">${collected.toFixed(2)}</span>
           </div>
           <div className="flex justify-between py-0.5">
             <span className="text-muted">Organizer (70%)</span>
             <span className="font-semibold text-accent">${organizerCut.toFixed(2)}</span>
           </div>
           <div className="flex justify-between py-0.5">
+            <span className="text-muted">DJ share (20%)</span>
+            <span className="font-semibold text-neon">${djCut.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between py-0.5">
             <span className="text-muted">BidaBeat (10%)</span>
             <span className="font-semibold text-muted">${bidabeatCut.toFixed(2)}</span>
           </div>
         </div>
+        <p className="mb-4 text-[11px] leading-[1.6] text-muted">
+          Guests were charged when they bought credits, so closing the event
+          moves no money from them. Payouts run to organizer and DJ bank
+          accounts after the event.
+        </p>
         <button
           onClick={endEvent}
           className="w-full rounded-xl bg-gradient-to-br from-neon-2 to-[#cc1155] px-4 py-3.5 font-display text-lg tracking-[2px] text-white transition active:scale-[0.99]"

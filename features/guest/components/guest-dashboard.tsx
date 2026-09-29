@@ -356,6 +356,11 @@ export function GuestDashboard({ data }: { data: GuestDashboardData }) {
             ))}
           </section>
 
+          <p className="mt-2.5 text-center text-[10px] leading-[1.6] text-muted md:col-span-3 md:col-start-1 md:row-start-1 md:mt-2">
+            💡 Credit packs are non-refundable. Any credits you don&apos;t use
+            before the event ends are donated to the event organizer.
+          </p>
+
           {/* Account quick actions — right rail */}
           <section className="mt-5 md:col-span-1 md:col-start-3 md:row-start-2 md:mt-0">
             <div className="mb-2.5 text-[11px] uppercase tracking-[2px] text-muted">

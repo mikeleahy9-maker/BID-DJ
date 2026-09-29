@@ -11,7 +11,7 @@ import { GuestBuyModal } from "./guest-buy-modal";
 import { GuestRequestSongModal, SongPick } from "./guest-request-song-modal";
 import { GuestGiftTipModal } from "./guest-gift-tip-modal";
 import { GuestBidAllModal } from "./guest-bid-all-modal";
-import { STARTING_CREDITS, REQUEST_COST } from "../data";
+import { REQUEST_COST } from "../data";
 
 export interface GuestQueueEvent {
   id: string;
@@ -52,9 +52,7 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
           .eq("user_id", user.id)
           .maybeSingle();
         if (ignore) return;
-        setCredits(
-          attendee ? Number(attendee.credit_balance) : STARTING_CREDITS
-        );
+        setCredits(attendee ? Number(attendee.credit_balance) : 0);
       };
 
       await loadBalance();
@@ -85,12 +83,16 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
     };
   }, [event.id]);
 
-  const available = credits ?? STARTING_CREDITS;
+  const available = credits ?? 0;
 
-  const confirmBuy = (creditsToAdd: number) => {
-    setCredits((c) => (c ?? STARTING_CREDITS) + creditsToAdd);
+  /**
+   * Credits are never granted client-side — the server grants them from the
+   * payment record. This only reflects the confirmed grant in the UI; the
+   * authoritative balance arrives over the attendees realtime subscription.
+   */
+  const handlePurchased = (creditsAdded: number) => {
     setBuyOpen(false);
-    show(`+${creditsToAdd} credits added`);
+    show(`+${creditsAdded} credits added`);
   };
 
   const applyBalance = (balance: number | null, fallback: number) => {
@@ -364,7 +366,8 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
       <GuestBuyModal
         open={buyOpen}
         onClose={() => setBuyOpen(false)}
-        onConfirm={confirmBuy}
+        eventId={event.id}
+        onPurchased={handlePurchased}
       />
 
       {/* Request a Song */}

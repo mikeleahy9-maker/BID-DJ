@@ -151,7 +151,7 @@ export function GuestEventPage({
 
             <div className="text-center text-[11px] text-muted">
               Credits are $1.00 each · Bonus on larger packs · Unused credits
-              refunded at end of event
+              donated to the organizer
             </div>
           </section>
 

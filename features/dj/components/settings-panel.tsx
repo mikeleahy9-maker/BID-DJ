@@ -82,8 +82,9 @@ export default function SettingsPanel() {
           ))}
         </div>
         <p className="text-[10px] leading-[1.6] text-muted">
-          Unused guest credits are auto-donated to the organizer. Payouts arrive 2–3 business days
-          after event end.
+          Unused guest credits are auto-donated to the organizer and are
+          included in the split. Payouts arrive 2–3 business days after event
+          end.
         </p>
       </section>
 

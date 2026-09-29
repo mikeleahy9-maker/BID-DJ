@@ -97,11 +97,22 @@ export const GUEST_HISTORY: {
   { name: "Rooftop Bar", dj: "DJ Phantom", date: "Apr 28, 2025", spent: 24, songs: 8, dot: "#cc66ff" },
 ];
 
-/** Dollar value of a single credit (1 credit = $1). */
+/**
+ * Nominal dollar value of a single credit, for display only.
+ *
+ * Do NOT use this to compute money owed. A $20.00 pack grants 23 credits (3
+ * bonus), so credits x $1 overstates revenue, and a refunded bid returns
+ * credits without a corresponding refund of money. Settlement is computed from
+ * the `revenue_cents` recorded in credit_purchases.
+ */
 export const CREDIT_VALUE = 1;
 
-/** Credits a guest starts with when they join an event. */
-export const STARTING_CREDITS = 20;
+/**
+ * Guests get no credits on joining an event — they must purchase a pack.
+ * Kept explicit (rather than inlined as 0) so the two places that need it read
+ * clearly, but note join_event_credits() grants nothing.
+ */
+export const STARTING_CREDITS = 0;
 
 /** Credits charged for each song request. */
 export const REQUEST_COST = 2;
