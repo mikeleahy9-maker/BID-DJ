@@ -82,6 +82,26 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
+
+    // Detach the previous payment method from the Stripe customer so replaced
+    // cards are permanently removed (best effort — a failure never blocks the
+    // swap itself).
+    if (customerId && pmId) {
+      const { data: prev } = await supabase
+        .from("profiles")
+        .select("stripe_payment_method_id")
+        .eq("id", user.id)
+        .maybeSingle();
+      const prevPmId = prev?.stripe_payment_method_id;
+      if (prevPmId && prevPmId !== pmId) {
+        try {
+          await getStripe().paymentMethods.detach(prevPmId);
+        } catch (err) {
+          console.warn("[confirm-card] could not detach previous card:", err);
+        }
+      }
+    }
+
     const { error: updateError } = await supabase
       .from("profiles")
       .update({

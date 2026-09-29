@@ -154,6 +154,7 @@ export interface GuestHistoryEvent {
   spent: number;
   songs: number;
   credits: number;
+  bought: number;
   dot: string;
 }
 
@@ -193,7 +194,23 @@ interface GuestMyEventsRow {
 /** Guest dashboard data — every event joined, their credits + spend per event. */
 export async function getGuestDashboardData(): Promise<GuestDashboardData> {
   const supabase = await getSupabaseServerClient();
-  const { data: rows } = await supabase.rpc("guest_my_events");
+
+  const [{ data: rows }, { data: purchases }] = await Promise.all([
+    supabase.rpc("guest_my_events"),
+    supabase
+      .from("credit_purchases")
+      .select("event_id, credits_granted"),
+  ]);
+
+  const boughtByEvent = new Map<string, number>();
+  for (const p of (purchases as
+    | { event_id: string; credits_granted: number }[]
+    | null) ?? []) {
+    boughtByEvent.set(
+      p.event_id,
+      (boughtByEvent.get(p.event_id) ?? 0) + p.credits_granted
+    );
+  }
 
   const history: GuestHistoryEvent[] = ((rows as GuestMyEventsRow[] | null) ?? []).map(
     (r) => ({
@@ -206,6 +223,7 @@ export async function getGuestDashboardData(): Promise<GuestDashboardData> {
       spent: Number(r.spent ?? 0),
       songs: Number(r.songs ?? 0),
       credits: Number(r.credit_balance ?? 0),
+      bought: boughtByEvent.get(r.event_id) ?? 0,
       dot: paletteDot(r.palette),
     })
   );

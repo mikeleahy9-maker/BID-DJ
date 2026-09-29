@@ -136,7 +136,7 @@ export function GuestDashboard({ data }: { data: GuestDashboardData }) {
     {
       icon: "💳",
       label: "Payment Methods",
-      onClick: () => show("Payment methods - coming soon"),
+      onClick: () => router.push("/payment-method"),
     },
     {
       icon: "🔔",
@@ -146,7 +146,7 @@ export function GuestDashboard({ data }: { data: GuestDashboardData }) {
     {
       icon: "👤",
       label: "Edit Profile",
-      onClick: () => show("Profile settings - coming soon"),
+      onClick: () => router.push("/profile"),
     },
   ];
 
@@ -326,10 +326,10 @@ export function GuestDashboard({ data }: { data: GuestDashboardData }) {
                       </span>
                       <span className="ml-auto text-right">
                         <span className="font-display text-[20px] leading-none text-neon">
-                          ${h.spent.toFixed(2)}
+                          💎 {h.bought}
                         </span>
                         <span className="mt-0.5 block text-[10px] text-muted">
-                          {h.songs} songs bid
+                          {h.bought === 1 ? "credit bought" : "credits bought"}
                         </span>
                       </span>
                     </button>
@@ -355,11 +355,6 @@ export function GuestDashboard({ data }: { data: GuestDashboardData }) {
               </div>
             ))}
           </section>
-
-          <p className="mt-2.5 text-center text-[10px] leading-[1.6] text-muted md:col-span-3 md:col-start-1 md:row-start-1 md:mt-2">
-            💡 Credit packs are non-refundable. Any credits you don&apos;t use
-            before the event ends are donated to the event organizer.
-          </p>
 
           {/* Account quick actions — right rail */}
           <section className="mt-5 md:col-span-1 md:col-start-3 md:row-start-2 md:mt-0">
