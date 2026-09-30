@@ -15,7 +15,7 @@ import { dbEventToGig, randomPin, type DbEventRow } from "@/features/dj/lib/dj-e
 interface EventsManagerProps {
   initialEvents: DJEvent[];
   recentEvents: PastEvent[];
-  owner: { name: string; handle: string; avatar: string };
+  owner: { name: string; handle: string; handleUrl: string | null; avatar: string };
   connectStatus: { connected: boolean; started: boolean };
 }
 
@@ -199,9 +199,21 @@ export default function EventsManager({
             owner.avatar
           )}
         </div>
-        <div>
+        <div className="min-w-0">
           <div className="font-display text-xl tracking-[1.5px]">{owner.name}</div>
-          <div className="text-[11px] text-neon">{owner.handle}</div>
+          {owner.handleUrl ? (
+            <Link
+              href={owner.handleUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block truncate text-[11px] text-neon transition hover:text-neon-2"
+              title={owner.handleUrl}
+            >
+              {owner.handle}
+            </Link>
+          ) : (
+            <div className="truncate text-[11px] text-muted">{owner.handle}</div>
+          )}
         </div>
         <Link
           href="/dj/settings"

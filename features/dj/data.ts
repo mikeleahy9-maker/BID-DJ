@@ -64,12 +64,6 @@ export interface EarningsPeriodData {
   events: { name: string; date: string; earned: number; songs: number }[];
 }
 
-export const DJ_OWNER = {
-  name: "DJ Phantom",
-  handle: "bidabeat.app/phantom",
-  avatar: "🎛️",
-};
-
 /** Event color palettes — mirrors the prototype's "Event Feel" picker. */
 export const EVENT_PALETTES: EventPalette[] = [
   { id: "noir", name: "Noir", bg: "#080808", neon: "#00ffe1", dot: "#00ffe1" },

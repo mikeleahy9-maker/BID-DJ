@@ -33,6 +33,10 @@ export function GuestEventPage({
     badge: string;
     name: string;
     djName: string;
+    djProfileUrl: string | null;
+    djAvatarUrl: string | null;
+    djBio: string | null;
+    djTags: string[];
     meta: string;
     queueCount: number;
     guestsBidding: number;
@@ -163,20 +167,31 @@ export function GuestEventPage({
             >
               <span className="flex flex-1 items-center gap-3">
                 <span
-                  className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full border-2 border-neon-2/30 bg-surface-2 text-[32px]"
+                  className="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-neon-2/30 bg-surface-2 text-[32px]"
                   aria-hidden
                 >
-                  🎛️
+                  {event.djAvatarUrl && event.djAvatarUrl.startsWith("http") ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={event.djAvatarUrl}
+                      alt={event.djName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <span>🎛️</span>
+                  )}
                 </span>
-                <span>
+                <span className="min-w-0">
                   <span className="mb-0.5 block text-[9px] font-bold uppercase tracking-[2px] text-neon-2">
                     Available to Book
                   </span>
-                  <span className="block font-display text-[20px] leading-none tracking-[1.5px]">
+                  <span className="block truncate font-display text-[20px] leading-none tracking-[1.5px]">
                     {event.djName}
                   </span>
-                  <span className="mt-0.5 block text-[10px] text-muted">
-                    Weddings · Clubs · Private Events
+                  <span className="mt-0.5 block truncate text-[10px] text-muted">
+                    {event.djTags.length > 0
+                      ? event.djTags.join(" · ")
+                      : "Weddings · Clubs · Private Events"}
                   </span>
                 </span>
               </span>
@@ -190,7 +205,17 @@ export function GuestEventPage({
         </div>
       </PageContainer>
 
-      <GuestHireModal open={hireOpen} onClose={() => setHireOpen(false)} />
+      <GuestHireModal
+        open={hireOpen}
+        onClose={() => setHireOpen(false)}
+        dj={{
+          name: event.djName,
+          profileUrl: event.djProfileUrl,
+          avatarUrl: event.djAvatarUrl,
+          bio: event.djBio,
+          tags: event.djTags,
+        }}
+      />
     </div>
   );
 }

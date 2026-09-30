@@ -29,13 +29,54 @@ interface DjShellProps {
   children: ReactNode;
   profileName?: string;
   accountLabel?: string;
+  avatarUrl?: string | null;
   isOwner?: boolean;
+}
+
+/**
+ * DJ avatar with a fallback.
+ * Falls back to the 🎛️ emoji when the DJ has not uploaded a profile photo,
+ * and also swallows broken/removed image URLs so a dead photo still shows
+ * the emoji instead of a broken-image icon.
+ */
+function DjAvatar({
+  src,
+  name,
+  className,
+  emojiClassName,
+}: {
+  src: string | null | undefined;
+  name: string;
+  className: string;
+  emojiClassName: string;
+}) {
+  const [broken, setBroken] = useState(false);
+  const showImage = typeof src === "string" && src.length > 0 && src.startsWith("http") && !broken;
+
+  return (
+    <div className={`${className} overflow-hidden`}>
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={src}
+          alt={name}
+          onError={() => setBroken(true)}
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <span aria-hidden className={emojiClassName}>
+          🎛️
+        </span>
+      )}
+    </div>
+  );
 }
 
 export function DjShell({
   children,
   profileName = "DJ",
   accountLabel = "owner account",
+  avatarUrl = null,
   isOwner = true,
 }: DjShellProps) {
   const pathname = usePathname();
@@ -106,9 +147,12 @@ export function DjShell({
 
           <div className="border-t border-edge p-3">
             <div className="flex items-center gap-3 rounded-lg bg-surface-2 p-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-bg text-xl">
-                🎛️
-              </div>
+              <DjAvatar
+                src={avatarUrl}
+                name={profileName}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-bg"
+                emojiClassName="text-xl"
+              />
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-semibold">{profileName}</div>
                 <div className="truncate text-[11px] text-muted">{accountLabel}</div>
@@ -151,8 +195,14 @@ export function DjShell({
             >
               👁 Preview
             </button>
-            <span className="rounded-full border border-neon-3 px-3 py-1.5 text-xs font-semibold text-neon-3">
-              🎛️ OWNER
+            <span className="flex items-center gap-2 rounded-full border border-neon-3 py-1 pl-1 pr-3 text-xs font-semibold text-neon-3">
+              <DjAvatar
+                src={avatarUrl}
+                name={profileName}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-2"
+                emojiClassName="text-[13px] leading-none"
+              />
+              OWNER
             </span>
           </div>
         </header>

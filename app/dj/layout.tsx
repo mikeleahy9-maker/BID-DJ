@@ -50,7 +50,7 @@ export default async function DJLayout({ children }: { children: React.ReactNode
   const supabase = await getSupabaseServerClient();
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role, activated, act_name, first_name, last_name")
+    .select("role, activated, act_name, first_name, last_name, avatar_url")
     .eq("id", user.id)
     .single();
 
@@ -73,6 +73,7 @@ export default async function DJLayout({ children }: { children: React.ReactNode
     <DjShell
       profileName={profileName}
       accountLabel={accountLabel}
+      avatarUrl={profile?.avatar_url ?? null}
       isOwner={role === "dj"}
     >
       {locked && <DJActivationBanner />}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -10,27 +11,23 @@ import { useToast } from "@/components/ui/use-toast";
  * Mobile renders as a bottom sheet; desktop as a centered dialog.
  */
 
-const DJ_GENRES = ["🎵 Top 40", "🔥 Hip-Hop", "🎉 EDM", "💃 R&B"];
-
-const DJ_STATS = [
-  { value: "183", label: "Gigs" },
-  { value: "4.9★", label: "Rating" },
-  { value: "📍", label: "Chicago, IL" },
-];
-
-// Placeholder — swap for real DJ/Band profile records once wired.
-const DJ_PROFILE = {
-  name: "DJ Phantom",
-  handle: "bidabeat.app/phantom",
-  bio: "Professional DJ with 8+ years experience. Specializing in high-energy sets for clubs, weddings, and private events. Every event is custom — no cookie-cutter playlists.",
-};
+const DEFAULT_BIO =
+  "This DJ hasn't added a bio yet. Send a booking request and they'll get back to you.";
 
 export function GuestHireModal({
   open,
   onClose,
+  dj,
 }: {
   open: boolean;
   onClose: () => void;
+  dj: {
+    name: string;
+    profileUrl: string | null;
+    avatarUrl: string | null;
+    bio: string | null;
+    tags: string[];
+  };
 }) {
   const { show, toastNode } = useToast();
   const [form, setForm] = useState({
@@ -76,49 +73,54 @@ export function GuestHireModal({
 
         {/* DJ profile header */}
         <div className="mb-3.5 flex items-center gap-3.5">
-          <div className="flex h-[60px] w-[60px] shrink-0 items-center justify-center rounded-full border-2 border-neon-2/40 bg-surface-2 text-[36px]">
-            🎛️
+          <div className="flex h-[60px] w-[60px] shrink-0 items-center justify-center overflow-hidden rounded-full border-2 border-neon-2/40 bg-surface-2 text-[36px]">
+            {dj.avatarUrl && dj.avatarUrl.startsWith("http") ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={dj.avatarUrl}
+                alt={dj.name}
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <span aria-hidden>🎛️</span>
+            )}
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="font-display text-[28px] leading-none tracking-[2px]">
-              {DJ_PROFILE.name}
+              {dj.name}
             </div>
-            <div className="mt-1 text-[11px] text-neon">
-              {DJ_PROFILE.handle}
-            </div>
+            {dj.profileUrl ? (
+              <Link
+                href={dj.profileUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-1 block truncate text-[11px] text-neon transition hover:text-neon-2"
+              >
+                View full profile →
+              </Link>
+            ) : (
+              <div className="mt-1 text-[11px] text-muted">DJ</div>
+            )}
           </div>
         </div>
 
-        {/* Genre/vibe tags */}
-        <div className="mb-3.5 flex flex-wrap gap-1.5">
-          {DJ_GENRES.map((tag) => (
-            <span
-              key={tag}
-              className="rounded-full border border-edge bg-surface-2 px-2.5 py-1 text-[11px]"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-
-        {/* Stats row */}
-        <div className="mb-3.5 flex gap-2">
-          {DJ_STATS.map((s) => (
-            <div
-              key={s.label}
-              className="flex-1 rounded-[10px] bg-surface-2 px-2 py-3 text-center"
-            >
-              <div className="font-display text-[22px] leading-none tracking-[1px] text-neon">
-                {s.value}
-              </div>
-              <div className="mt-0.5 text-[10px] text-muted">{s.label}</div>
-            </div>
-          ))}
-        </div>
+        {/* Tags from the DJ's real profile */}
+        {dj.tags.length > 0 && (
+          <div className="mb-3.5 flex flex-wrap gap-1.5">
+            {dj.tags.map((tag) => (
+              <span
+                key={tag}
+                className="rounded-full border border-neon/40 bg-neon/5 px-2.5 py-1 text-[11px] font-semibold text-neon"
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Bio */}
         <div className="rounded-lg bg-surface-2 px-3.5 py-3 text-[13px] leading-[1.6] text-muted">
-          {DJ_PROFILE.bio}
+          {dj.bio || DEFAULT_BIO}
         </div>
 
         <div className="my-4 h-px bg-edge" />

@@ -1,5 +1,5 @@
 import { getCurrentUser, getSupabaseServerClient } from "@/lib/supabase/server";
-import { getAppHost } from "@/lib/app-url";
+import { getAppUrl } from "@/lib/app-url";
 import { getDjConnectStatus } from "@/features/dj/lib/dj-connect";
 import EventsManager from "@/features/dj/components/events-manager";
 import type { PastEvent } from "@/features/dj/data";
@@ -10,13 +10,6 @@ import {
 } from "@/features/dj/lib/dj-events";
 
 export const metadata = { title: "Events & Setup" };
-
-function slugify(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
 
 function pastDateLabel(input: string | null | undefined): string {
   if (!input) return "Date TBD";
@@ -90,7 +83,7 @@ export default async function DJEventsPage() {
   const profileRequest = user
     ? supabase
         .from("profiles")
-        .select("act_name, display_name, first_name, last_name, avatar_url")
+        .select("act_name, display_name, first_name, last_name, avatar_url, public_slug")
         .eq("id", user.id)
         .maybeSingle()
     : Promise.resolve({ data: null });
@@ -113,6 +106,7 @@ export default async function DJEventsPage() {
     first_name?: string | null;
     last_name?: string | null;
     avatar_url?: string | null;
+    public_slug?: string | null;
   } | null;
 
   const ownerName =
@@ -120,11 +114,18 @@ export default async function DJEventsPage() {
     profile?.display_name ||
     [profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
     "DJ";
-  const handleBase = profile?.act_name || profile?.first_name || "dj";
+
+  // The owner's real public profile page. Previously this was a fabricated
+  // `${host}/${slugify(act_name)}` string that pointed at no real route; it
+  // now links to the actual /dj-profile/<public_slug> page.
+  const publicUrl = profile?.public_slug
+    ? `${getAppUrl()}/dj-profile/${profile.public_slug}`
+    : null;
 
   const owner = {
     name: ownerName,
-    handle: `${getAppHost()}/${slugify(handleBase)}`,
+    handle: publicUrl ?? "Public page coming soon",
+    handleUrl: publicUrl,
     avatar: profile?.avatar_url || "🎛️",
   };
 

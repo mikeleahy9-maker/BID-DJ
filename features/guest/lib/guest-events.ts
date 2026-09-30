@@ -1,4 +1,5 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
+import { getAppUrl } from "@/lib/app-url";
 import { EVENT_PALETTES } from "@/features/dj/data";
 
 const FALLBACK_DOTS = ["#ff6600", "#cc66ff", "#ff2d78"];
@@ -26,6 +27,10 @@ export interface GuestEventView {
   code: string;
   name: string;
   djName: string;
+  djProfileUrl: string | null;
+  djAvatarUrl: string | null;
+  djBio: string | null;
+  djTags: string[];
   badge: string;
   meta: string;
   queueCount: number;
@@ -73,12 +78,20 @@ export async function getLiveEventForGuest(
   const { data: event } = await supabase
     .from("events")
     .select(
-      "id, name, act, event_date, event_time, venue, city, code, status"
+      "id, name, act, event_date, event_time, venue, city, code, status, dj_id"
     )
     .eq("code", normalized)
     .maybeSingle();
 
   if (!event) return null;
+
+  // The DJ's public details for the "Hire this DJ" card. Guests cannot read
+  // the profiles table (RLS), so this goes through the public RPC.
+  const { data: djRows } = event.dj_id
+    ? await supabase.rpc("public_dj_profile_by_id", { p_dj_id: event.dj_id })
+    : { data: null };
+  const dj = (djRows as Record<string, unknown>[] | null)?.[0] ?? null;
+  const djSlug = dj?.slug ? String(dj.slug) : null;
 
   const { count: queueCount } = await supabase
     .from("event_tracks")
@@ -117,6 +130,10 @@ export async function getLiveEventForGuest(
     code: event.code,
     name: event.name,
     djName: event.act || "DJ",
+    djProfileUrl: djSlug ? `${getAppUrl()}/dj-profile/${djSlug}` : null,
+    djAvatarUrl: dj?.avatar_url ? String(dj.avatar_url) : null,
+    djBio: dj?.description ? String(dj.description) : null,
+    djTags: Array.isArray(dj?.tags) ? (dj.tags as unknown[]).map(String) : [],
     badge: `🎉 ${dateBadge(event.event_date)}`,
     meta,
     queueCount: queueCount ?? 0,
