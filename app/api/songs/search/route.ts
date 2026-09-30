@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/supabase/server";
+import { readHelperSession } from "@/lib/helper-session";
 
 const DEEZER_SEARCH = "https://api.deezer.com/search";
 
@@ -23,8 +24,8 @@ function toTrack(t: DeezerTrack) {
 }
 
 export async function GET(req: NextRequest) {
-  const user = await getCurrentUser();
-  if (!user) {
+  const [user, helper] = await Promise.all([getCurrentUser(), readHelperSession()]);
+  if (!user && !helper) {
     return NextResponse.json({ error: "Not signed in." }, { status: 401 });
   }
 

@@ -45,6 +45,7 @@ export default function QueueManager({
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showEndCharge, setShowEndCharge] = useState(false);
   const [showLiveQr, setShowLiveQr] = useState(false);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
   const [refundTarget, setRefundTarget] = useState<LiveTrack | null>(null);
   const [refundReason, setRefundReason] = useState(0);
@@ -70,6 +71,8 @@ export default function QueueManager({
     approveRequest,
     rejectRequest,
     markPlayed,
+    markPlayedLocal,
+    removeTrackLocal,
     refundTrack,
   } = useLiveQueue(eventContext?.id ?? "");
 
@@ -128,6 +131,18 @@ export default function QueueManager({
     setShowRefund(true);
 
     try {
+      if (helperMode) {
+        const res = await fetch(
+          `/api/helper-queue/refund?trackId=${encodeURIComponent(song.id)}`
+        );
+        if (!res.ok) throw new Error("Could not load the song's stake.");
+        const data = (await res.json()) as { total?: number; holders?: number };
+        setRefundStake({
+          total: Number(data.total ?? 0),
+          holders: Number(data.holders ?? 0),
+        });
+        return;
+      }
       const supabase = getSupabaseClient();
       const { data, error } = await supabase
         .from("bids")
@@ -150,12 +165,32 @@ export default function QueueManager({
     setShowRefund(false);
     setRefundTarget(null);
     try {
-      const { refunded, holders } = await refundTrack(song.id);
+      const refunded = await (async () => {
+        if (helperMode) {
+          const res = await fetch("/api/helper-queue/refund", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ trackId: song.id }),
+          });
+          const body = (await res.json().catch(() => null)) as {
+            ok?: boolean;
+            error?: string;
+            refunded?: number;
+            holders?: number;
+          } | null;
+          if (!res.ok || !body?.ok) {
+            throw new Error(body?.error || "Could not refund the song.");
+          }
+          return { refunded: Number(body.refunded ?? 0), holders: Number(body.holders ?? 0) };
+        }
+        return refundTrack(song.id);
+      })();
+      removeTrackLocal(song.id);
       const who =
-        holders === 0
+        refunded.holders === 0
           ? "no guest had credits on it"
-          : `returned 💎${refunded} to ${holders} guest${
-              holders === 1 ? "" : "s"
+          : `returned 💎${refunded.refunded} to ${refunded.holders} guest${
+              refunded.holders === 1 ? "" : "s"
             }`;
       show(`"${song.title}" refunded — ${who} — "${REFUND_REASONS[refundReason].label}"`);
     } catch (err) {
@@ -196,17 +231,20 @@ export default function QueueManager({
       return;
     }
     try {
-      const res = await fetch(`/api/dj/events/${eventContext.id}/tracks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: song.title,
-          artist: song.artist,
-          deezerId: song.deezerId ?? null,
-          image: song.image ?? null,
-          credits: seedBudget,
-        }),
-      });
+      const res = await fetch(
+        helperMode ? "/api/helper-queue/seed" : `/api/dj/events/${eventContext.id}/tracks`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: song.title,
+            artist: song.artist,
+            deezerId: song.deezerId ?? null,
+            image: song.image ?? null,
+            credits: seedBudget,
+          }),
+        }
+      );
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(body?.error || "Could not seed the song.");
@@ -251,6 +289,23 @@ export default function QueueManager({
     }
   };
 
+  const copyGuestLink = () => {
+    if (!eventContext) return;
+    const link = `${appUrl}/join/${eventContext.code}`;
+    navigator.clipboard?.writeText(link).catch(() => {});
+    show(`Guest link copied: ${link}`);
+  };
+
+  const saveQrPng = () => {
+    if (!qrDataUrl) return;
+    const a = document.createElement("a");
+    a.href = qrDataUrl;
+    a.download = `${eventContext?.code ?? "event"}-QR.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   if (!eventContext) {
     return (
       <div className="flex flex-col gap-6">
@@ -278,25 +333,27 @@ export default function QueueManager({
   return (
     <div className="flex flex-col gap-6">
       {/* Live event details */}
-      <section className="flex flex-wrap items-center gap-3 rounded-xl border border-neon-2/25 bg-surface p-4">
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-neon-2/40 bg-neon-2/10 px-2.5 py-1 text-[11px] font-bold text-neon-2">
-          ● LIVE
-        </span>
-        <div className="min-w-0 flex-1">
+      <section className="rounded-xl border border-neon-2/25 bg-surface p-4">
+        <div className="flex items-center justify-between gap-3">
+          <span className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-neon-2/40 bg-neon-2/10 px-2.5 py-1 text-[11px] font-bold text-neon-2">
+            ● LIVE
+          </span>
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="text-[11px] uppercase tracking-[1px] text-muted">Join code</span>
+            <span className="rounded-lg border border-neon bg-neon/10 px-3 py-1 font-mono text-sm font-bold text-neon">
+              {eventContext.code}
+            </span>
+          </div>
+        </div>
+        <div className="mt-3 min-w-0">
           <div className="truncate font-display text-xl tracking-[1.5px]">
             {eventContext.name}
           </div>
-          <div className="text-[11px] text-muted">
+          <div className="truncate text-[11px] text-muted">
             {[eventContext.act, eventContext.date, eventContext.time, eventContext.venue]
               .filter(Boolean)
               .join(" · ") || "Live now"}
           </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[11px] uppercase tracking-[1px] text-muted">Join code</span>
-          <span className="rounded-lg border border-neon bg-neon/10 px-3 py-1 font-mono text-sm font-bold text-neon">
-            {eventContext.code}
-          </span>
         </div>
       </section>
 
@@ -348,13 +405,13 @@ export default function QueueManager({
 
       {/* Leaderboard */}
       <section>
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="flex items-center gap-2 text-[11px] uppercase tracking-[2px] text-muted">
-            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-neon-2" aria-hidden />
-            Live Leaderboard
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="flex min-w-0 items-center gap-2 text-[11px] uppercase tracking-[2px] text-muted">
+            <span className="inline-block h-2 w-2 shrink-0 animate-pulse rounded-full bg-neon-2" aria-hidden />
+            <span className="truncate">Live Leaderboard</span>
           </h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full border border-edge bg-surface px-3 py-1 text-[11px] text-muted">
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="hidden rounded-full border border-edge bg-surface px-3 py-1 text-[11px] text-muted sm:inline-flex">
               {boardCount} in queue
             </span>
             <button
@@ -378,11 +435,31 @@ export default function QueueManager({
           actions={(t) => (
             <div className="flex flex-wrap gap-2">
               <button
-                onClick={() =>
-                  runQueueAction(`"${t.title}" banked — $${(
-                    Number(t.credits || 0) * PRICING.CREDIT_VALUE
-                  ).toFixed(2)} earned`, () => markPlayed(t.id))
-                }
+                onClick={() => {
+                  const message = helperMode
+                    ? `"${t.title}" marked played`
+                    : `"${t.title}" banked — $${(
+                        Number(t.credits || 0) * PRICING.CREDIT_VALUE
+                      ).toFixed(2)} earned`;
+                  runQueueAction(message, async () => {
+                    if (helperMode) {
+                      const res = await fetch("/api/helper-queue/played", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ trackId: t.id }),
+                      });
+                      if (!res.ok) {
+                        const body = (await res.json().catch(() => null)) as {
+                          error?: string;
+                        } | null;
+                        throw new Error(body?.error || "Could not mark the song as played.");
+                      }
+                    } else {
+                      await markPlayed(t.id);
+                    }
+                    markPlayedLocal(t.id);
+                  });
+                }}
                 className="whitespace-nowrap rounded-lg border border-neon px-3 py-1.5 text-[11px] font-bold tracking-[0.5px] text-neon transition hover:bg-neon hover:text-bg active:bg-neon active:text-bg"
               >
                 ▶ PLAYED
@@ -676,6 +753,7 @@ export default function QueueManager({
             <QrDisplay
               value={`${appUrl}/join/${eventContext.code}`}
               size={190}
+              onDataUrl={setQrDataUrl}
             />
           </div>
           <div className="mt-3 font-display text-3xl tracking-[8px] text-neon">
@@ -687,6 +765,22 @@ export default function QueueManager({
           <div className="mt-1 text-xs text-muted">
             Guest PIN: <b className="text-neon">{eventContext.pin || "—"}</b>
             {" · "}Helper PIN: <b className="text-neon">{eventContext.helperPin || "—"}</b>
+          </div>
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={copyGuestLink}
+              className="flex-1 rounded-lg border border-edge bg-surface-2 px-3 py-2.5 text-xs font-bold text-foreground transition hover:border-neon hover:text-neon"
+            >
+              📋 Copy URL
+            </button>
+            <button
+              onClick={saveQrPng}
+              disabled={!qrDataUrl}
+              title="Download this QR code as a PNG image"
+              className="flex-1 rounded-lg border border-neon/40 bg-neon/5 px-3 py-2.5 text-xs font-bold text-neon transition hover:border-neon hover:bg-neon/15 active:scale-95 disabled:opacity-40"
+            >
+              ⬇️ Save PNG
+            </button>
           </div>
         </div>
       </Modal>

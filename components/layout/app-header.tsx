@@ -16,15 +16,21 @@ export interface NavItem {
 interface AppHeaderProps {
   navItems?: NavItem[] | ReadonlyArray<NavItem>;
   rightSlot?: React.ReactNode;
+  /** Logo size. Defaults to "md"; "sm" is used on compact helper/utility headers. */
+  logoSize?: "sm" | "md";
 }
 
-export const AppHeader: React.FC<AppHeaderProps> = ({ navItems = [], rightSlot }) => {
+export const AppHeader: React.FC<AppHeaderProps> = ({
+  navItems = [],
+  rightSlot,
+  logoSize = "md",
+}) => {
   return (
     <header className="sticky top-0 z-50 border-b border-edge bg-surface">
-      <div className="mx-auto max-w-7xl px-6">
-        <div className="flex h-16 items-center justify-between">
-          <Link href="/" className="flex items-center gap-2">
-            <Logo />
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <div className="flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-2 py-2">
+          <Link href="/" className="flex shrink-0 items-center gap-2">
+            <Logo size={logoSize} />
           </Link>
 
           {navItems.length > 0 && (
@@ -37,7 +43,7 @@ export const AppHeader: React.FC<AppHeaderProps> = ({ navItems = [], rightSlot }
             </nav>
           )}
 
-          <div className="flex items-center gap-3 min-w-0">{rightSlot}</div>
+          <div className="flex min-w-0 items-center gap-3">{rightSlot}</div>
         </div>
       </div>
     </header>

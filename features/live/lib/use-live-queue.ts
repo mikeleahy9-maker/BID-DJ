@@ -305,6 +305,16 @@ export function useLiveQueue(eventId: string) {
     if (error) throw new Error(error.message);
   }, []);
 
+  const markPlayedLocal = useCallback((trackId: string) => {
+    setTracks((prev) =>
+      prev.map((t) => (t.id === trackId ? { ...t, status: "played" as const } : t))
+    );
+  }, []);
+
+  const removeTrackLocal = useCallback((trackId: string) => {
+    setTracks((prev) => prev.filter((t) => t.id !== trackId));
+  }, []);
+
   const refundTrack = useCallback(
     async (trackId: string): Promise<RefundTrackResult> => {
       const supabase = getSupabaseClient();
@@ -400,6 +410,8 @@ export function useLiveQueue(eventId: string) {
     rejectRequest,
     markPlaying,
     markPlayed,
+    markPlayedLocal,
+    removeTrackLocal,
     refundTrack,
     placeBid,
     placeDownBid,
