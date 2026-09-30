@@ -87,10 +87,16 @@ export function LiveBoard({
         return (
           <div
             key={t.id}
-            className={`flex items-start gap-3 overflow-hidden rounded-xl border bg-surface p-3.5 ${
+            className={`relative flex items-start gap-3 overflow-hidden rounded-xl border bg-surface p-3.5 ${
               isTop ? "border-neon-3/25" : "border-edge"
             }`}
           >
+            <span
+              className={`absolute inset-y-0 left-0 w-[3px] ${
+                isTop ? "bg-neon-3" : "bg-neon"
+              }`}
+              aria-hidden
+            />
             <div
               className={`w-7 min-w-7 pt-0.5 text-center font-display text-[30px] leading-none ${
                 isTop ? "text-neon-3" : "text-muted"

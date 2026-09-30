@@ -269,22 +269,22 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
           Live at {event.name}
         </div>
 
-        <div className="grid gap-5 md:grid-cols-3 md:items-start md:gap-6">
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:items-start md:gap-6">
           {/* Main column — credits, request, queue */}
           <section className="md:col-span-2">
             {/* Credits banner (credit-banner) */}
-            <div className="mb-4 flex items-center justify-between rounded-xl border border-edge bg-[linear-gradient(135deg,rgba(0,255,225,0.08),rgba(255,45,120,0.08))] px-[18px] py-4">
-              <div>
+            <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-edge bg-[linear-gradient(135deg,rgba(0,255,225,0.08),rgba(255,45,120,0.08))] px-4 py-4 sm:px-[18px]">
+              <div className="min-w-0">
                 <div className="text-[11px] uppercase tracking-[1px] text-muted">
                   Your Credits
                 </div>
-                <div className="font-display text-[36px] leading-none tracking-[2px] text-neon">
+                <div className="font-display text-[30px] leading-none tracking-[2px] text-neon sm:text-[36px]">
                   {available}
                 </div>
               </div>
               <button
                 onClick={() => setBuyOpen(true)}
-                className="cursor-pointer border-none bg-neon-2 rounded-lg px-3.5 py-2.5 text-xs font-bold tracking-[0.5px] text-white"
+                className="shrink-0 cursor-pointer border-none bg-neon-2 rounded-lg px-3 py-2.5 text-xs font-bold tracking-[0.5px] text-white sm:px-3.5"
               >
                 + BUY MORE
               </button>
@@ -308,12 +308,12 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
             </button>
 
             {/* Live queue */}
-            <div className="mb-2.5 flex items-center justify-between">
-              <div className="text-[11px] uppercase tracking-[2px] text-muted">
+            <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <div className="min-w-0 text-[11px] uppercase tracking-[2px] text-muted">
                 <span className="mr-1 inline-block h-2 w-2 animate-pulse rounded-full bg-neon-2" aria-hidden />
                 Live Queue — Bid to Move Up
               </div>
-              <div className="text-[11px] text-muted">
+              <div className="min-w-0 flex-1 truncate text-right text-[11px] text-muted sm:flex-none sm:text-left">
                 {event.djName} is spinning
               </div>
             </div>
@@ -330,29 +330,29 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
             <div className="text-[11px] uppercase tracking-[2px] text-muted">
               ✨ Support the Night
             </div>
-            <div className="mt-2.5 flex gap-2.5 md:flex-col">
+            <div className="mt-2.5 flex flex-col gap-2.5 sm:flex-row md:flex-col">
               <button
                 onClick={() => setGiftTipKind("gift")}
-                className="flex flex-1 cursor-pointer items-center gap-2.5 rounded-xl border border-[#a855f7]/40 bg-[rgba(168,85,247,0.06)] px-3 py-3.5 text-left text-foreground transition active:scale-[0.97] md:flex-none"
+                className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-[#a855f7]/40 bg-[rgba(168,85,247,0.06)] px-3 py-3.5 text-left text-foreground transition active:scale-[0.97] sm:flex-1 md:w-auto md:flex-none"
               >
                 <span className="shrink-0 text-[22px]" aria-hidden>🎁</span>
-                <span>
+                <span className="min-w-0">
                   <span className="block text-[13px] font-bold">Gift Credits</span>
-                  <span className="mt-0.5 block text-[10px] text-muted">
+                  <span className="mt-0.5 block truncate text-[10px] text-muted">
                     Donate $ to the event
                   </span>
                 </span>
               </button>
               <button
                 onClick={() => setGiftTipKind("tip")}
-                className="flex flex-1 cursor-pointer items-center gap-2.5 rounded-xl border border-neon-2/35 bg-[rgba(255,45,120,0.06)] px-3 py-3.5 text-left text-foreground transition active:scale-[0.97] md:flex-none"
+                className="flex w-full cursor-pointer items-center gap-2.5 rounded-xl border border-neon-2/35 bg-[rgba(255,45,120,0.06)] px-3 py-3.5 text-left text-foreground transition active:scale-[0.97] sm:flex-1 md:w-auto md:flex-none"
               >
                 <span className="shrink-0 text-[22px]" aria-hidden>🎛️</span>
-                <span>
+                <span className="min-w-0">
                   <span className="block text-[13px] font-bold">
                     Tip the DJ/Band
                   </span>
-                  <span className="mt-0.5 block text-[10px] text-muted">
+                  <span className="mt-0.5 block truncate text-[10px] text-muted">
                     Send cash directly
                   </span>
                 </span>
