@@ -1,8 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Modal } from "@/components/ui/modal";
-import { searchDeezerSongs } from "@/features/dj/lib/deezer";
+import { useInfiniteSongSearch } from "@/features/dj/lib/use-infinite-song-search";
+import { InfiniteScrollLoader } from "@/features/dj/components/infinite-scroll-loader";
 import type { SeedSong } from "@/features/dj/data";
 
 type SearchMode = "song" | "artist" | "freeform";
@@ -30,38 +31,17 @@ export function GuestRequestSongModal({
   onNotEnoughCredits: () => void;
 }) {
   const [mode, setMode] = useState<SearchMode>("song");
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SeedSong[]>([]);
-  const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [freeTitle, setFreeTitle] = useState("");
   const [freeArtist, setFreeArtist] = useState("");
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { query, results, searching, loadingMore, hasMore, handleSearch, loadMore, reset: resetSearch } =
+    useInfiniteSongSearch();
 
   const reset = () => {
     setMode("song");
-    setQuery("");
-    setResults([]);
-    setSearching(false);
+    resetSearch();
     setFreeTitle("");
     setFreeArtist("");
-  };
-
-  const handleSearch = (value: string) => {
-    setQuery(value);
-    const q = value.trim();
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    if (q.length < 2) {
-      setResults([]);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
-    searchTimerRef.current = setTimeout(async () => {
-      const found = await searchDeezerSongs(q);
-      setResults(found);
-      setSearching(false);
-    }, 700);
   };
 
   const submitCatalog = async (s: SeedSong) => {
@@ -233,6 +213,11 @@ export function GuestRequestSongModal({
                 </button>
               </div>
             ))}
+            <InfiniteScrollLoader
+              onLoadMore={loadMore}
+              loading={loadingMore}
+              hasMore={hasMore}
+            />
           </div>
         </div>
       ) : (

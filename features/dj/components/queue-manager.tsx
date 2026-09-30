@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { QrDisplay } from "@/components/ui/qr-display";
 import { useToast } from "@/components/ui/use-toast";
-import { searchDeezerSongs } from "@/features/dj/lib/deezer";
+import { InfiniteScrollLoader } from "@/features/dj/components/infinite-scroll-loader";
+import { useInfiniteSongSearch } from "@/features/dj/lib/use-infinite-song-search";
 import { PRICING, REFUND_REASONS, SeedSong } from "@/features/dj/data";
 import { LiveBoard } from "@/features/live/components/live-board";
 import { useLiveQueue, type LiveTrack } from "@/features/live/lib/use-live-queue";
@@ -59,11 +60,17 @@ export default function QueueManager({
   } | null>(null);
 
   const [showSeed, setShowSeed] = useState(false);
-  const [seedQuery, setSeedQuery] = useState("");
   const [seedBudget, setSeedBudget] = useState(5);
-  const [seedResults, setSeedResults] = useState<SeedSong[]>([]);
-  const [seedSearching, setSeedSearching] = useState(false);
-  const seedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const {
+    query: seedQuery,
+    results: seedResults,
+    searching: seedSearching,
+    loadingMore: seedLoadingMore,
+    hasMore: seedHasMore,
+    handleSearch: handleSeedSearch,
+    loadMore: loadMoreSeed,
+    reset: resetSeedSearch,
+  } = useInfiniteSongSearch();
 
   const {
     tracks,
@@ -204,26 +211,10 @@ export default function QueueManager({
 
   useEffect(() => {
     return () => {
-      if (seedTimerRef.current) clearTimeout(seedTimerRef.current);
+      resetSeedSearch();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const handleSeedSearch = (value: string) => {
-    setSeedQuery(value);
-    const q = value.trim();
-    if (seedTimerRef.current) clearTimeout(seedTimerRef.current);
-    if (q.length < 2) {
-      setSeedResults([]);
-      setSeedSearching(false);
-      return;
-    }
-    setSeedSearching(true);
-    seedTimerRef.current = setTimeout(async () => {
-      const results = await searchDeezerSongs(q);
-      setSeedResults(results);
-      setSeedSearching(false);
-    }, 700);
-  };
 
   const seedSong = async (song: SeedSong) => {
     if (!eventContext?.id) {
@@ -250,7 +241,7 @@ export default function QueueManager({
         throw new Error(body?.error || "Could not seed the song.");
       }
       setShowSeed(false);
-      setSeedQuery("");
+      resetSeedSearch();
       setSeedBudget(5);
       show(`🎯 "${song.title}" seeded with 💎${seedBudget}!`);
     } catch (err) {
@@ -497,9 +488,23 @@ export default function QueueManager({
                 <div className="flex gap-2">
                   <button
                     onClick={() =>
-                      runQueueAction(`"${r.title}" approved — added to the queue`, () =>
-                        approveRequest(r)
-                      )
+                      runQueueAction(`"${r.title}" approved — added to the queue`, async () => {
+                        if (helperMode) {
+                          const res = await fetch("/api/helper-queue/approve", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ requestId: r.id }),
+                          });
+                          if (!res.ok) {
+                            const body = (await res.json().catch(() => null)) as {
+                              error?: string;
+                            } | null;
+                            throw new Error(body?.error || "Could not approve the request.");
+                          }
+                          return;
+                        }
+                        await approveRequest(r);
+                      })
                     }
                     className="rounded-lg border border-neon px-3 py-1.5 text-[11px] font-bold text-neon transition hover:bg-neon hover:text-bg"
                   >
@@ -507,7 +512,23 @@ export default function QueueManager({
                   </button>
                   <button
                     onClick={() =>
-                      runQueueAction("Request declined", () => rejectRequest(r))
+                      runQueueAction("Request declined", async () => {
+                        if (helperMode) {
+                          const res = await fetch("/api/helper-queue/reject", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ requestId: r.id }),
+                          });
+                          if (!res.ok) {
+                            const body = (await res.json().catch(() => null)) as {
+                              error?: string;
+                            } | null;
+                            throw new Error(body?.error || "Could not decline the request.");
+                          }
+                          return;
+                        }
+                        await rejectRequest(r);
+                      })
                     }
                     className="rounded-lg border border-neon-2 px-3 py-1.5 text-[11px] font-bold text-neon-2 transition hover:bg-neon-2 hover:text-white"
                   >
@@ -732,6 +753,11 @@ export default function QueueManager({
               <span className="ml-3 text-[11px] font-bold text-neon-3">+ 💎{seedBudget}</span>
             </button>
           ))}
+          <InfiniteScrollLoader
+            onLoadMore={loadMoreSeed}
+            loading={seedLoadingMore}
+            hasMore={seedHasMore}
+          />
           {seedSearching && (
             <p className="py-3 text-center text-xs text-muted">Searching…</p>
           )}

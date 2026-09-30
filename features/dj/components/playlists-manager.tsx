@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { useToast } from "@/components/ui/use-toast";
-import { searchDeezerSongs } from "@/features/dj/lib/deezer";
+import { InfiniteScrollLoader } from "@/features/dj/components/infinite-scroll-loader";
+import { useInfiniteSongSearch } from "@/features/dj/lib/use-infinite-song-search";
 import type { SavedPlaylist, SeedSong } from "@/features/dj/data";
 
 const ICON_CHOICES = ["🎵", "🔥", "🌊", "🎉", "🪩", "⚡", "💿", "🎧"];
@@ -39,10 +40,16 @@ export default function PlaylistsManager({
   // Add-songs modal + Deezer search
   const [addingTo, setAddingTo] = useState<SavedPlaylist | null>(null);
   const [addingId, setAddingId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<SeedSong[]>([]);
-  const [searching, setSearching] = useState(false);
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const {
+    query: searchQuery,
+    results: searchResults,
+    searching,
+    loadingMore: searchLoadingMore,
+    hasMore: searchHasMore,
+    handleSearch,
+    loadMore: loadMoreSearch,
+    reset: resetSearch,
+  } = useInfiniteSongSearch();
 
   const [creditDrafts, setCreditDrafts] = useState<Record<string, string>>({});
   const saveTimerRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -52,7 +59,6 @@ export default function PlaylistsManager({
   useEffect(() => {
     const timers = saveTimerRef.current;
     return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
       Object.values(timers).forEach((t) => clearTimeout(t));
     };
   }, []);
@@ -138,23 +144,6 @@ export default function PlaylistsManager({
       setDeletingId(null);
       setDeleteConfirmId(null);
     }
-  };
-
-  const handleSearch = (value: string) => {
-    setSearchQuery(value);
-    const q = value.trim();
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    if (q.length < 2) {
-      setSearchResults([]);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
-    searchTimerRef.current = setTimeout(async () => {
-      const results = await searchDeezerSongs(q);
-      setSearchResults(results);
-      setSearching(false);
-    }, 700);
   };
 
   const addSong = async (song: SeedSong) => {
@@ -561,8 +550,7 @@ export default function PlaylistsManager({
             <button
               onClick={() => {
                 setAddingTo(viewingPl);
-                setSearchQuery("");
-                setSearchResults([]);
+                resetSearch();
               }}
               className="mt-4 w-full rounded-xl border border-dashed border-neon px-4 py-3 text-center text-sm font-bold text-neon transition hover:bg-neon/10"
             >
@@ -661,6 +649,13 @@ export default function PlaylistsManager({
                 </div>
               );
             })
+          )}
+          {searchResults.length > 0 && (
+            <InfiniteScrollLoader
+              onLoadMore={loadMoreSearch}
+              loading={searchLoadingMore}
+              hasMore={searchHasMore}
+            />
           )}
         </div>
 

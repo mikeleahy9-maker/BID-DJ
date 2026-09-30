@@ -3,6 +3,7 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import { readHelperSession } from "@/lib/helper-session";
 
 const DEEZER_SEARCH = "https://api.deezer.com/search";
+const PAGE_SIZE = 10;
 
 interface DeezerTrack {
   id: number;
@@ -31,13 +32,18 @@ export async function GET(req: NextRequest) {
 
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim();
   if (q.length < 2) {
-    return NextResponse.json({ tracks: [] });
+    return NextResponse.json({ tracks: [], total: 0 });
   }
 
-  let json: { data?: DeezerTrack[] };
+  const index = Math.max(
+    0,
+    Number.parseInt(req.nextUrl.searchParams.get("index") ?? "0", 10) || 0
+  );
+
+  let json: { data?: DeezerTrack[]; total?: number };
   try {
     const res = await fetch(
-      `${DEEZER_SEARCH}?q=${encodeURIComponent(q)}&limit=10`,
+      `${DEEZER_SEARCH}?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&index=${index}`,
       { next: { revalidate: 300 } }
     );
     if (!res.ok) throw new Error(`Deezer responded ${res.status}`);
@@ -45,12 +51,19 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     console.error("[songs/search] Deezer request failed:", err);
     return NextResponse.json(
-      { tracks: [], error: "Could not reach Deezer." },
+      { tracks: [], total: 0, error: "Could not reach Deezer." },
       { status: 502 }
     );
   }
 
   const tracks = (json.data ?? []).map(toTrack);
+  const count = json.data?.length ?? 0;
+  const nextIndex = index + count;
 
-  return NextResponse.json({ tracks });
+  return NextResponse.json({
+    tracks,
+    total: Number(json.total ?? 0),
+    nextIndex,
+    hasMore: count > 0 && nextIndex < Number(json.total ?? 0),
+  });
 }

@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
 import { QrDisplay } from "@/components/ui/qr-display";
 import { useToast } from "@/components/ui/use-toast";
-import { searchDeezerSongs } from "@/features/dj/lib/deezer";
+import { InfiniteScrollLoader } from "@/features/dj/components/infinite-scroll-loader";
+import { useInfiniteSongSearch } from "@/features/dj/lib/use-infinite-song-search";
 import {
   DJEvent,
   EVENT_PALETTES,
@@ -66,11 +67,17 @@ export default function EventSetupPanel({
   const [showQr, setShowQr] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [showSeed, setShowSeed] = useState(false);
-  const [seedQuery, setSeedQuery] = useState("");
   const [seedBudget, setSeedBudget] = useState(5);
-  const [seedResults, setSeedResults] = useState<SeedSong[]>([]);
-  const [seedSearching, setSeedSearching] = useState(false);
-  const seedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const {
+    query: seedQuery,
+    results: seedResults,
+    searching: seedSearching,
+    loadingMore: seedLoadingMore,
+    hasMore: seedHasMore,
+    handleSearch: handleSeedSearch,
+    loadMore: loadMoreSeed,
+    reset: resetSeedSearch,
+  } = useInfiniteSongSearch();
 
   const [showEdit, setShowEdit] = useState(false);
   const [row, setRow] = useState<DbEventRow>(dbRow);
@@ -89,8 +96,9 @@ export default function EventSetupPanel({
 
   useEffect(() => {
     return () => {
-      if (seedTimerRef.current) clearTimeout(seedTimerRef.current);
+      resetSeedSearch();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const goLive = async () => {
@@ -110,23 +118,6 @@ export default function EventSetupPanel({
     } finally {
       setGoingLive(false);
     }
-  };
-
-  const handleSeedSearch = (value: string) => {
-    setSeedQuery(value);
-    const q = value.trim();
-    if (seedTimerRef.current) clearTimeout(seedTimerRef.current);
-    if (q.length < 2) {
-      setSeedResults([]);
-      setSeedSearching(false);
-      return;
-    }
-    setSeedSearching(true);
-    seedTimerRef.current = setTimeout(async () => {
-      const results = await searchDeezerSongs(q);
-      setSeedResults(results);
-      setSeedSearching(false);
-    }, 700);
   };
 
   const persistSeed = async (song: SeedSong, budget: number) => {
@@ -165,7 +156,7 @@ export default function EventSetupPanel({
       return [...prev, { ...song, credits: budget }];
     });
     setShowSeed(false);
-    setSeedQuery("");
+    resetSeedSearch();
     setSeedBudget(5);
     show(`🎯 "${song.title}" seeded with 💎${budget}!`);
     persistSeed(song, budget);
@@ -810,6 +801,11 @@ export default function EventSetupPanel({
               <span className="ml-3 text-[11px] font-bold text-neon-3">+ 💎{seedBudget}</span>
             </button>
           ))}
+          <InfiniteScrollLoader
+            onLoadMore={loadMoreSeed}
+            loading={seedLoadingMore}
+            hasMore={seedHasMore}
+          />
           {seedSearching && (
             <p className="py-3 text-center text-xs text-muted">Searching…</p>
           )}

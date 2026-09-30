@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
 import { useToast } from "@/components/ui/use-toast";
+import { Modal } from "@/components/ui/modal";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { LiveBoard } from "@/features/live/components/live-board";
 import { useLiveQueue, type LiveTrack } from "@/features/live/lib/use-live-queue";
@@ -29,8 +30,10 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
   const [requestOpen, setRequestOpen] = useState(false);
   const [giftTipKind, setGiftTipKind] = useState<"gift" | "tip" | null>(null);
   const [bidAllTarget, setBidAllTarget] = useState<LiveTrack | null>(null);
+  const [requestsOpen, setRequestsOpen] = useState(false);
 
-  const { tracks, requestSong, placeBid, placeDownBid } = useLiveQueue(event.id);
+  const { tracks, myRequests, requestSong, placeBid, placeDownBid } =
+    useLiveQueue(event.id);
 
   useEffect(() => {
     let ignore = false;
@@ -307,6 +310,30 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
               <span className="ml-auto text-xl" aria-hidden>→</span>
             </button>
 
+            {/* Your Requests — opens a modal with live status updates */}
+            {myRequests.length > 0 && (
+              <div className="mb-[18px]">
+                <button
+                  onClick={() => setRequestsOpen(true)}
+                  className="flex w-full cursor-pointer items-center gap-3 rounded-xl border border-edge bg-surface px-4 py-3 text-left transition active:bg-surface-2"
+                >
+                  <span className="text-base" aria-hidden>🎧</span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[12px] font-bold tracking-[0.5px] text-foreground">
+                      Your Requests
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-muted">
+                      {myRequests.length} song{myRequests.length === 1 ? "" : "s"}{" "}
+                      sent — tap to view status
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-sm text-muted" aria-hidden>
+                    →
+                  </span>
+                </button>
+              </div>
+            )}
+
             {/* Live queue */}
             <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <div className="min-w-0 text-[11px] uppercase tracking-[2px] text-muted">
@@ -395,7 +422,87 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
         onClose={() => setGiftTipKind(null)}
       />
 
+      {/* Your Requests */}
+      <Modal open={requestsOpen} onClose={() => setRequestsOpen(false)} sheet>
+        <button
+          onClick={() => setRequestsOpen(false)}
+          aria-label="Close"
+          className="absolute right-5 top-4 cursor-pointer border-none bg-transparent text-xl text-muted"
+        >
+          ✕
+        </button>
+        <div className="font-display text-[28px] tracking-[2px]">
+          Your Requests
+        </div>
+        <div className="mb-4 mt-1 text-xs text-muted">
+          Live status — updates automatically as the DJ reviews
+        </div>
+        <div className="flex flex-col gap-2">
+          {myRequests.length === 0 && (
+            <div className="py-5 text-center text-[13px] text-muted">
+              No requests sent yet
+            </div>
+          )}
+          {myRequests.map((r) => (
+            <div
+              key={r.id}
+              className="flex items-center gap-3 rounded-xl border border-edge bg-surface px-3.5 py-3"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-[13px] font-semibold text-foreground">
+                  {r.title}
+                </div>
+                <div className="mt-0.5 truncate text-[11px] text-muted">
+                  {r.artist}
+                </div>
+              </div>
+              <RequestStatus status={r.status} />
+            </div>
+          ))}
+        </div>
+      </Modal>
+
       {toastNode}
     </div>
+  );
+}
+
+function RequestStatus({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string }> = {
+    pending: {
+      label: "⏳ DJ review",
+      cls: "border-neon-3/40 bg-neon-3/5 text-neon-3",
+    },
+    approved: {
+      label: "✓ Approved",
+      cls: "border-neon/40 bg-neon/5 text-neon",
+    },
+    rejected: {
+      label: "✕ Declined",
+      cls: "border-neon-2/40 bg-neon-2/5 text-neon-2",
+    },
+    playing: {
+      label: "▶ Now playing",
+      cls: "border-neon/40 bg-neon/5 text-neon",
+    },
+    played: {
+      label: "✓ Played",
+      cls: "border-edge bg-surface-2 text-muted",
+    },
+    skipped: {
+      label: "Skipped",
+      cls: "border-edge bg-surface-2 text-muted",
+    },
+  };
+  const s = map[status] ?? {
+    label: status,
+    cls: "border-edge bg-surface-2 text-muted",
+  };
+  return (
+    <span
+      className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-bold tracking-[0.5px] ${s.cls}`}
+    >
+      {s.label}
+    </span>
   );
 }

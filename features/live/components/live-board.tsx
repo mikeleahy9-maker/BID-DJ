@@ -92,9 +92,8 @@ export function LiveBoard({
             }`}
           >
             <span
-              className={`absolute inset-y-0 left-0 w-[3px] ${
-                isTop ? "bg-neon-3" : "bg-neon"
-              }`}
+              className="absolute inset-y-0 left-0 w-[3px]"
+              style={{ backgroundColor: bar }}
               aria-hidden
             />
             <div
