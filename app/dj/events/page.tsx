@@ -1,5 +1,6 @@
 import { getCurrentUser, getSupabaseServerClient } from "@/lib/supabase/server";
 import { getAppHost } from "@/lib/app-url";
+import { getDjConnectStatus } from "@/features/dj/lib/dj-connect";
 import EventsManager from "@/features/dj/components/events-manager";
 import type { PastEvent } from "@/features/dj/data";
 import {
@@ -104,6 +105,8 @@ export default async function DJEventsPage() {
 
   const recentEvents = user ? await getRecentGigs(supabase, user.id) : [];
 
+  const connect = user ? await getDjConnectStatus(user.id) : null;
+
   const profile = profileResult.data as {
     act_name?: string | null;
     display_name?: string | null;
@@ -130,6 +133,14 @@ export default async function DJEventsPage() {
       initialEvents={initialEvents}
       recentEvents={recentEvents}
       owner={owner}
+      connectStatus={
+        connect
+          ? {
+              connected: connect.connected,
+              started: connect.hasAccount,
+            }
+          : { connected: false, started: false }
+      }
     />
   );
 }

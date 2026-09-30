@@ -157,6 +157,36 @@ export async function POST(req: NextRequest) {
         );
         break;
       }
+      case "account.updated": {
+        // Connect (Express) account status change for a DJ payout account.
+        // Fires when onboarding progress changes, bank details update, or
+        // payouts get enabled — lets the DJ dashboard reflect it live.
+        const account = event.data.object as {
+          id: string;
+          details_submitted?: boolean;
+          payouts_enabled?: boolean;
+          metadata?: Record<string, string | undefined>;
+        };
+        const userId = account.metadata?.user_id;
+        if (userId) {
+          const { error } = await getSupabaseAdmin()
+            .from("dj_owner_profiles")
+            .upsert(
+              {
+                user_id: userId,
+                stripe_connect_id: account.id,
+              },
+              { onConflict: "user_id" }
+            );
+          if (error) {
+            throw error;
+          }
+          console.info(
+            `[webhook stripe] Connect account ${account.id} details_submitted=${account.details_submitted} payouts_enabled=${account.payouts_enabled}`
+          );
+        }
+        break;
+      }
       default:
         // Unhandled events are acknowledged quietly.
         break;

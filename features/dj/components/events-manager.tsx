@@ -16,6 +16,7 @@ interface EventsManagerProps {
   initialEvents: DJEvent[];
   recentEvents: PastEvent[];
   owner: { name: string; handle: string; avatar: string };
+  connectStatus: { connected: boolean; started: boolean };
 }
 
 const EMPTY_FORM = {
@@ -33,6 +34,7 @@ export default function EventsManager({
   initialEvents,
   recentEvents,
   owner,
+  connectStatus,
 }: EventsManagerProps) {
   const { show, toastNode } = useToast();
   const router = useRouter();
@@ -40,6 +42,26 @@ export default function EventsManager({
   const [showCreate, setShowCreate] = useState(false);
   const [goingLiveId, setGoingLiveId] = useState<string | null>(null);
   const liveExists = events.some((ev) => ev.status === "live");
+
+  // ---- Stripe Connect onboarding ----
+  const [connecting, setConnecting] = useState(false);
+  const [connectDismissed, setConnectDismissed] = useState(false);
+  const connectNeeded = !connectStatus.connected && !connectDismissed;
+
+  const startConnect = async () => {
+    setConnecting(true);
+    try {
+      const res = await fetch("/api/dj/connect", { method: "POST" });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.url) {
+        throw new Error(json.error ?? "Could not start Stripe onboarding.");
+      }
+      window.location.href = json.url;
+    } catch (err) {
+      show(err instanceof Error ? err.message : "Could not start Stripe onboarding.");
+      setConnecting(false);
+    }
+  };
 
   const goLive = async (id: string) => {
     setGoingLiveId(id);
@@ -148,6 +170,12 @@ export default function EventsManager({
   };
 
   const openCreate = () => {
+    // Payout gate: onboarding must be completed before an event is created.
+    if (!connectStatus.connected) {
+      show("Connect your bank before creating an event");
+      setConnectDismissed(false);
+      return;
+    }
     const helperPin = randomPin(6);
     const pin = randomPin(4, helperPin);
     setForm({ ...EMPTY_FORM, pin, helperPin });
@@ -182,6 +210,53 @@ export default function EventsManager({
           ⚙
         </Link>
       </section>
+
+      {/* Stripe Connect onboarding prompt */}
+      {connectNeeded && (
+        <section className="rounded-xl border border-neon/40 bg-neon/5 p-5">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="mb-1 flex items-center gap-2 text-[11px] uppercase tracking-[2px] text-neon">
+                <span className="h-2 w-2 rounded-full bg-neon-2" aria-hidden />
+                {connectStatus.started ? "Continue onboarding" : "Get paid"}
+              </div>
+              <h2 className="font-display text-[20px] tracking-[1px]">
+                {connectStatus.started
+                  ? "Finish connecting your bank to Stripe"
+                  : "Connect your bank to get paid"}
+              </h2>
+              <p className="mt-1 text-[12px] leading-[1.7] text-muted">
+                {connectStatus.started
+                  ? "You started onboarding but Stripe still needs a few details before payouts are enabled."
+                  : "You earn 20% of each event&apos;s revenue plus tips. Stripe Express securely collects your bank and identity details — you&apos;ll be redirected to Stripe to finish."}{" "}
+                <span className="text-neon">Events can&apos;t be created until this is done.</span>
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-2.5">
+              {!connectStatus.started && (
+                <button
+                  onClick={() => setConnectDismissed(true)}
+                  disabled={connecting}
+                  className="cursor-pointer rounded-lg border border-edge bg-surface-2 px-4 py-2 text-xs font-bold text-foreground transition hover:border-neon hover:text-neon disabled:opacity-60"
+                >
+                  Later
+                </button>
+              )}
+              <button
+                onClick={startConnect}
+                disabled={connecting}
+                className="cursor-pointer rounded-lg border border-neon bg-neon px-4 py-2 text-xs font-bold text-bg transition hover:bg-[#00c9b1] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {connecting
+                  ? "Starting…"
+                  : connectStatus.started
+                    ? "Continue on Stripe →"
+                    : "Connect Stripe →"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* Full-width gigs list */}
       <div className="flex flex-col gap-4">

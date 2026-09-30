@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomInt, randomUUID } from "node:crypto";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getCurrentUser, getSupabaseServerClient } from "@/lib/supabase/server";
+import { getDjConnectStatus } from "@/features/dj/lib/dj-connect";
 import { EVENT_PROJECTION } from "@/features/dj/lib/dj-events";
 
 const LOGO_BUCKET = "bid a beat";
@@ -71,6 +72,20 @@ export async function POST(req: NextRequest) {
   if (profile?.role !== "dj") {
     return NextResponse.json(
       { error: "Only DJ accounts can create events." },
+      { status: 403 }
+    );
+  }
+
+  // Payout gate: a DJ must complete Stripe Connect onboarding before any event
+  // is created, so every event is guaranteed a settlement destination when it
+  // ends. Guests can't be charged on an event whose DJ can't be paid.
+  const connect = await getDjConnectStatus(user.id);
+  if (!connect.connected) {
+    return NextResponse.json(
+      {
+        error: "Connect your bank before creating an event.",
+        connectRequired: true,
+      },
       { status: 403 }
     );
   }
