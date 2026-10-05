@@ -1,3 +1,4 @@
+import { fetchDjConnectAccountStatus } from "@/lib/stripe-connect";
 import { getStripeOrNull } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -44,16 +45,13 @@ export async function getDjConnectStatus(userId: string): Promise<{
   }
 
   try {
-    const account = await stripe.accounts.retrieve(connectId);
-    const detailsSubmitted = Boolean(account.details_submitted);
-    const payoutsEnabled =
-      Boolean(account.details_submitted) && Boolean(account.payouts_enabled);
+    const status = await fetchDjConnectAccountStatus(connectId);
     return {
       connectId,
       hasAccount: true,
-      detailsSubmitted,
-      payoutsEnabled,
-      connected: detailsSubmitted && payoutsEnabled,
+      detailsSubmitted: status.detailsSubmitted,
+      payoutsEnabled: status.payoutsEnabled,
+      connected: status.connected,
     };
   } catch (err) {
     console.error(`[connect-status] account ${connectId} retrieval failed:`, err);
