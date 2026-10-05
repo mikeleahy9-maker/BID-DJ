@@ -6,9 +6,28 @@ import { getAppUrl } from "@/lib/app-url";
  * Server-only module — never import from a client component.
  */
 
-/** Stripe Price ID for the one-time DJ activation fee ($50). */
-export const DJ_ACTIVATION_PRICE_ID = "price_1UGzSwSNzy6FSWcqZUTv8Dkh";
 export const DJ_ACTIVATION_FEE_LABEL = "BidaBeat DJ Activation";
+
+/**
+ * Stripe Price ID for the one-time DJ activation fee ($50).
+ *
+ * Read from the environment (STRIPE_DJ_ACTIVATION_PRICE_ID) so a different
+ * Stripe account or a new test/live price can be used without touching code.
+ * This is a getter rather than a module constant because the value is only
+ * needed at request time -- reading process.env at module scope would be
+ * evaluated during `next build`, where server env may not be loaded yet.
+ *
+ * Not prefixed with NEXT_PUBLIC_ because it is server-only configuration.
+ */
+export function getDjActivationPriceId(): string {
+  const priceId = process.env.STRIPE_DJ_ACTIVATION_PRICE_ID?.trim();
+  if (!priceId) {
+    throw new Error(
+      "STRIPE_DJ_ACTIVATION_PRICE_ID is not set. Add it to your environment or .env.local (see .env.example)."
+    );
+  }
+  return priceId;
+}
 
 /**
  * Credit packs sold to guests.

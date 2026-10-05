@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { DJ_ACTIVATION_PRICE_ID, getAppUrl, getStripe } from "@/lib/stripe";
+import { getAppUrl, getDjActivationPriceId, getStripe } from "@/lib/stripe";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 /**
@@ -14,6 +14,16 @@ export async function POST(req: NextRequest) {
   if (!process.env.STRIPE_SECRET_KEY) {
     return NextResponse.json(
       { error: "Stripe is not configured (STRIPE_SECRET_KEY missing)." },
+      { status: 503 }
+    );
+  }
+
+  if (!process.env.STRIPE_DJ_ACTIVATION_PRICE_ID?.trim()) {
+    return NextResponse.json(
+      {
+        error:
+          "DJ activation checkout is not configured (STRIPE_DJ_ACTIVATION_PRICE_ID missing).",
+      },
       { status: 503 }
     );
   }
@@ -54,7 +64,7 @@ export async function POST(req: NextRequest) {
       line_items: [
         {
           quantity: 1,
-          price: DJ_ACTIVATION_PRICE_ID,
+          price: getDjActivationPriceId(),
         },
       ],
       metadata: { userId, type: "dj_activation_fee" },
