@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/modal";
 import { QrDisplay } from "@/components/ui/qr-display";
 import { useToast } from "@/components/ui/use-toast";
 import { InfiniteScrollLoader } from "@/features/dj/components/infinite-scroll-loader";
+import OrganizerInvite from "@/features/dj/components/organizer-invite";
 import { useInfiniteSongSearch } from "@/features/dj/lib/use-infinite-song-search";
 import {
   DJEvent,
@@ -511,6 +512,8 @@ export default function EventSetupPanel({
               : "▶ GO LIVE WITH THIS EVENT"}
         </button>
       </div>
+
+      <OrganizerInvite eventId={dbRow.id} />
 
       {/* ---- Edit event modal ---- */}
       <Modal open={showEdit} onClose={() => setShowEdit(false)}>

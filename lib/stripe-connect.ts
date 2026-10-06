@@ -163,3 +163,81 @@ export async function fetchDjConnectAccountUserId(accountId: string): Promise<st
   const account = await getStripe().v2.core.accounts.retrieve(accountId);
   return account.metadata?.user_id ?? null;
 }
+
+/**
+ * Creates the connected account that receives an organizer's share.
+ *
+ * Mirrors the DJ shape (Express dashboard, application-collected losses/fees,
+ * stripe_transfers) because the organizer is paid through a destination transfer
+ * exactly like a DJ. The one difference is identity: this account is keyed on
+ * `organization_id` rather than `user_id`, because an organizer is not a
+ * BidaBeat user and has no Supabase auth id.
+ *
+ * `metadata.organization_id` is what lets the webhook resolve the account back
+ * to the organizations row and flip it to 'onboarded'.
+ */
+export async function createOrganizationConnectAccount(params: {
+  email: string;
+  organizationId: string;
+}): Promise<string> {
+  const account = await getStripe().v2.core.accounts.create({
+    contact_email: params.email,
+    dashboard: "express",
+    identity: {
+      country: getDjConnectCountry(),
+      entity_type: "individual",
+    },
+    defaults: {
+      responsibilities: {
+        losses_collector: "application",
+        fees_collector: "application",
+      },
+    },
+    configuration: {
+      recipient: {
+        capabilities: {
+          stripe_balance: {
+            stripe_transfers: { requested: true },
+          },
+        },
+      },
+    },
+    metadata: { role: "organization", organization_id: params.organizationId },
+  });
+
+  return account.id;
+}
+
+/**
+ * Mints the hosted onboarding link an organizer is sent into.
+ *
+ * `eventName` / `organizationName` ride along on the return_url so the landing
+ * page can greet the organizer without a public lookup endpoint. They are only
+ * ever interpolated into a query string.
+ */
+export async function createOrganizationOnboardingLink(params: {
+  accountId: string;
+  eventId: string;
+  eventName: string;
+  organizationName: string;
+}): Promise<string> {
+  const qs = new URLSearchParams({
+    event: params.eventName,
+    organization: params.organizationName,
+  });
+
+  const link = await getStripe().v2.core.accountLinks.create({
+    account: params.accountId,
+    use_case: {
+      type: "account_onboarding",
+      account_onboarding: {
+        configurations: ["recipient"],
+        collection_options: { fields: "eventually_due" },
+        refresh_url: `${getAppUrl()}/dj/events/${params.eventId}`,
+        return_url: `${getAppUrl()}/organizer/onboarding?${qs.toString()}`,
+      },
+    },
+  });
+
+  return link.url;
+}
