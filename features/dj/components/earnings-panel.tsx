@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import StripeConnectEmbedded from "./stripe-connect-embedded";
+import { Pagination } from "@/components/ui/pagination";
 
 const PERIODS = [
   { key: "week", label: "Week" },
@@ -23,18 +24,23 @@ interface EarningsData {
   gigs: number;
   songs: number;
   guests: number;
-  events: Array<{ name: string; date: string; earned: number; songs: number }>;
-  payouts: Array<{
-    id: string;
-    amount: number;
+  page: number;
+  pageSize: number;
+  totalEvents: number;
+  events: Array<{
+    name: string;
+    date: string;
+    earned: number;
     status: string;
-    created_at: string;
-    paid_at: string | null;
+    reason?: string | null;
+    songs: number;
+    guests: number;
   }>;
 }
 
 export default function EarningsPanel() {
   const [period, setPeriod] = useState<(typeof PERIODS)[number]["key"]>("week");
+  const [page, setPage] = useState(1);
   const [data, setData] = useState<EarningsData | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -42,7 +48,7 @@ export default function EarningsPanel() {
   useEffect(() => {
     let cancelled = false;
     setTimeout(() => setRefreshing(true), 0);
-    fetch(`/api/dj/earnings?period=${period}`)
+    fetch(`/api/dj/earnings?period=${period}&page=${page}`)
       .then((res) => res.json())
       .then((json) => {
         if (!cancelled) {
@@ -54,7 +60,7 @@ export default function EarningsPanel() {
         if (!cancelled) setTimeout(() => setRefreshing(false), 0);
       });
     return () => { cancelled = true; };
-  }, [period]);
+  }, [period, page]);
 
   if (!data) {
     return (
@@ -73,13 +79,12 @@ export default function EarningsPanel() {
     );
   }
 
-  if (!data) {
-    return (
-      <div className="flex flex-col gap-6">
-        <p className="text-center text-muted">No earnings data available.</p>
-      </div>
-    );
-  }
+  const STATUS_TONE: Record<string, string> = {
+    Settled: "text-neon",
+    Processing: "text-amber-400",
+    Pending: "text-muted",
+    Failed: "text-red-400",
+  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -89,7 +94,10 @@ export default function EarningsPanel() {
           <button
             key={p.key}
             type="button"
-            onClick={() => setPeriod(p.key)}
+            onClick={() => {
+              setPeriod(p.key);
+              setPage(1);
+            }}
             className={`rounded-lg border px-4 py-2 text-sm font-semibold transition ${
               period === p.key
                 ? "border-neon bg-neon text-bg"
@@ -106,11 +114,13 @@ export default function EarningsPanel() {
 
       {/* Hero total */}
       <section className="rounded-xl border border-neon/20 bg-gradient-to-br from-neon/8 to-neon-2/6 p-6 text-center">
-        <div className="text-[11px] uppercase tracking-[1px] text-muted">Total Earned</div>
+        <div className="text-[11px] uppercase tracking-[1px] text-muted">Received</div>
         <div className="my-2 font-display text-6xl tracking-[2px] text-neon">
           ${(data?.total ?? 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}
         </div>
-        <div className="text-xs text-muted">{PERIOD_LABEL[period]} · DJ share (20%)</div>
+        <div className="text-xs text-muted">
+          {PERIOD_LABEL[period]} · DJ share (20%)
+        </div>
       </section>
 
       {/* Stats row */}
@@ -140,8 +150,14 @@ export default function EarningsPanel() {
                 className="flex flex-wrap items-center gap-3 border-b border-edge px-4 py-3 last:border-b-0"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold">{ev.name}</div>
-                  <div className="text-[11px] text-muted">{ev.date} · {ev.songs} songs</div>
+                  <div className="text-sm font-semibold capitalize">{ev.name}</div>
+                  <div className="text-[11px] text-muted">
+                    {ev.date} · {ev.songs} songs · {ev.guests} guests ·{" "}
+                    <span className={STATUS_TONE[ev.status] ?? "text-muted"}>{ev.status}</span>
+                  </div>
+                  {ev.reason ? (
+                    <div className="text-[11px] text-muted/80">{ev.reason}</div>
+                  ) : null}
                 </div>
                 <div className="font-display text-2xl text-neon">${ev.earned.toFixed(2)}</div>
               </div>
@@ -150,6 +166,19 @@ export default function EarningsPanel() {
             <div className="px-4 py-8 text-center text-muted">No events in this period</div>
           )}
         </div>
+
+        {data.totalEvents > (data.pageSize ?? 10) && (
+          <Pagination
+            page={data.page ?? 1}
+            pageCount={Math.max(
+              1,
+              Math.ceil((data.totalEvents ?? 0) / (data.pageSize ?? 10))
+            )}
+            total={data.totalEvents}
+            pageSize={data.pageSize ?? 10}
+            onChange={setPage}
+          />
+        )}
       </section>
 
       {/* Stripe Connect balances and payouts, embedded inline */}
@@ -159,34 +188,6 @@ export default function EarningsPanel() {
         </h2>
         <StripeConnectEmbedded />
       </section>
-
-      {/* Payout history from our DB */}
-      {data.payouts && data.payouts.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-[11px] uppercase tracking-[2px] text-muted">
-            Payout History (BidaBeat)
-          </h2>
-          <div className="overflow-hidden rounded-xl border border-edge bg-surface">
-            {data.payouts.map((p) => (
-              <div
-                key={p.id}
-                className="flex flex-wrap items-center gap-3 border-b border-edge px-4 py-3 last:border-b-0"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-semibold">${p.amount.toFixed(2)}</div>
-                  <div className="text-[11px] text-muted">
-                    {new Date(p.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                    · {p.status}
-                  </div>
-                </div>
-                <div className="font-display text-xl text-neon">
-                  {p.paid_at ? "Paid" : p.status === "processing" ? "Processing" : "Pending"}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   );
 }
