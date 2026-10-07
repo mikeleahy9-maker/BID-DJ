@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCreditPack, getStripe, getStripeOrNull } from "@/lib/stripe";
 import { fetchDjConnectAccountUserId } from "@/lib/stripe-connect";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { readChargeFee, releaseHeldShares, retryOutstandingSettlements } from "@/lib/settlement";
+import { readChargeFee, retryOutstandingSettlements } from "@/lib/settlement";
 
 /**
  * POST /api/webhooks/stripe
@@ -160,7 +160,11 @@ export async function POST(req: NextRequest) {
       if (accountId) {
         try {
           await linkConnectAccountToDj(accountId);
-          await releaseHeldShares(accountId);
+          // The account just became payable (onboarding finished). Hand the
+          // transfer back to the single ordering engine: it releases held
+          // shares oldest-event-first, exactly like the cron and
+          // balance.available sweeps, so a fresh account never jumps the queue.
+          await retryOutstandingSettlements();
         } catch (err) {
           console.error(`[webhook stripe] ${notification.type} handling failed:`, err);
           return NextResponse.json({ error: "Webhook handler error." }, { status: 500 });
@@ -310,8 +314,10 @@ export async function POST(req: NextRequest) {
           );
         }
         // Runs whether or not the DJ link is known: an organizer's account has
-        // no metadata.user_id but can still be owed a held share.
-        await releaseHeldShares(account.id);
+        // no metadata.user_id but can still be owed a held share. As with the
+        // v2 path, the now-payable account pays through the single ordering
+        // engine, so releases stay oldest-event-first (FIFO) globally.
+        await retryOutstandingSettlements();
         break;
       }
       case "balance.available": {

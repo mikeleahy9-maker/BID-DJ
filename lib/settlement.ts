@@ -133,6 +133,7 @@ interface SettlementRow {
   dj_attempt: number;
   dj_failure_reason: string | null;
   updated_at: string;
+  created_at: string;
 }
 
 interface LegState {
@@ -156,7 +157,7 @@ const SETTLEMENT_SELECT = `
   dj_rate, platform_rate, organization_id, organization_stripe_account_id,
   organizer_status,
   organizer_attempt, organizer_failure_reason, dj_status, dj_attempt,
-  dj_failure_reason, updated_at`;
+  dj_failure_reason, created_at, updated_at`;
 
 /** Reads readiness without letting a Stripe lookup abort the whole close. */
 async function recipientReady(accountId: string | null): Promise<{
@@ -774,94 +775,6 @@ const freshLegs = (): { organizer: LegState; dj: LegState } => ({
  *
  * Returns how many legs actually went out.
  */
-export async function releaseHeldShares(accountId: string): Promise<number> {
-  const admin = getSupabaseAdmin();
-
-  const jobs: { row: SettlementRow; leg: "organizer" | "dj" }[] = [];
-
-  const { data: orgRows } = await admin
-    .from("event_settlements")
-    .select(SETTLEMENT_SELECT)
-    .eq("organization_stripe_account_id", accountId)
-    .eq("organizer_status", "held");
-  for (const row of (orgRows ?? []) as SettlementRow[]) {
-    jobs.push({ row, leg: "organizer" });
-  }
-
-  const { data: owners } = await admin
-    .from("dj_owner_profiles")
-    .select("user_id")
-    .eq("stripe_connect_id", accountId);
-  const djIds = (owners ?? []).map((o) => (o as { user_id: string }).user_id);
-
-  if (djIds.length > 0) {
-    const { data: djRows } = await admin
-      .from("event_settlements")
-      .select(SETTLEMENT_SELECT)
-      .in("dj_id", djIds)
-      .eq("dj_status", "held");
-    for (const row of (djRows ?? []) as SettlementRow[]) {
-      jobs.push({ row, leg: "dj" });
-    }
-  }
-
-  if (jobs.length === 0) return 0;
-
-  const names = await loadEventNames(
-    admin,
-    jobs.map((job) => job.row.event_id)
-  );
-  let released = 0;
-
-  for (const job of jobs) {
-    const legs = await executeLegs({
-      admin,
-      settlementId: job.row.id,
-      eventId: job.row.event_id,
-      eventName: names.get(job.row.event_id) ?? "event",
-      djAccountId: job.leg === "dj" ? accountId : null,
-      organizer: {
-        cents: job.row.organizer_cents,
-        destination: job.row.organization_stripe_account_id,
-      },
-      dj: { cents: job.row.dj_cents, destination: job.leg === "dj" ? accountId : null },
-      current: {
-        organizer: {
-          status: job.row.organizer_status,
-          attempt: job.row.organizer_attempt,
-          failureReason: job.row.organizer_failure_reason,
-        },
-        dj: {
-          status: job.row.dj_status,
-          attempt: job.row.dj_attempt,
-          failureReason: job.row.dj_failure_reason,
-        },
-      },
-      updatedAt: job.row.updated_at,
-      only: job.leg,
-    });
-
-    if (legs.error) {
-      console.error(
-        `[settlement] could not release the held ${job.leg} share on ${job.row.event_id}: ${legs.error}`
-      );
-      continue;
-    }
-
-    if (job.leg === "dj") {
-      await writePayout(admin, job.row.event_id, job.row.dj_id, job.row.dj_cents, legs.dj);
-    }
-    if ((job.leg === "dj" ? legs.dj.status : legs.organizer.status) === "sent") {
-      released += 1;
-    }
-  }
-
-  if (released > 0) {
-    console.info(`[settlement] released ${released} held share(s) for ${accountId}`);
-  }
-  return released;
-}
-
 type StripeClient = NonNullable<ReturnType<typeof getStripeOrNull>>;
 
 /**
@@ -883,9 +796,12 @@ async function availableUsdCents(stripe: StripeClient): Promise<number | null> {
  *
  * Reads the settlement rows book-kept by /end but not yet paid out, checks the
  * platform's available balance actually covers them, and sends each one that
- * qualifies. Triggered twice: by Stripe's `balance.available` event, which
- * fires when a charge moves out of `pending` -- the only moment a transfer like
- * this can succeed -- and by the scheduled /api/cron/settle sweep.
+ * qualifies. This is the single ordering engine for moving money. It is
+ * triggered by the scheduled /api/cron/settle sweep and by Stripe webhooks:
+ * `balance.available` (charges moved out of pending), and `account.updated` /
+ * Account v2 events (a recipient just became payable by onboarding instead of
+ * queue-jumping). Rows are processed oldest-event-closed first (FIFO), and
+ * within an event the organizer is transferred before the DJ.
  *
  * Two kinds of leg qualify, because both record that Stripe did NOT send the
  * money: `pending` (booked, or waiting on funds) and `held` (funds or
@@ -905,10 +821,16 @@ export async function retryOutstandingSettlements(): Promise<number> {
     .from("event_settlements")
     .select(SETTLEMENT_SELECT)
     .in("status", ["in_progress", "partial"])
-    .or("organizer_status.in.(pending,held),dj_status.in.(pending,held)");
+    .or("organizer_status.in.(pending,held),dj_status.in.(pending,held)")
+    // FIFO: oldest event closed first, so transfers follow close order rather
+    // than arbitrary DB order. The defensive sort below keeps it when an
+    // intervening query strips the ORDER BY (e.g. through a view).
+    .order("created_at", { ascending: true });
 
   if (error || !unsettledRows?.length) return 0;
-  const rows = unsettledRows as SettlementRow[];
+  const rows = (unsettledRows as SettlementRow[]).sort((a, b) =>
+    a.created_at.localeCompare(b.created_at)
+  );
 
   const outstanding = rows.reduce((sum, row) => {
     if (row.organizer_status === "pending" || row.organizer_status === "held") {
@@ -985,9 +907,9 @@ export async function retryOutstandingSettlements(): Promise<number> {
       if (liveOrgAccountId) {
         finance.organization_stripe_account_id = liveOrgAccountId;
       }
-      // Persist the refreshed link so the record (and releaseHeldShares, which
-      // matches on the account id) catches up with an organizer added after
-      // the event was closed.
+      // Persist the refreshed link so the record catches up with an organizer
+      // added after the event was closed (the live resolution above already
+      // fixed this run's transfer).
       if (
         row.organization_id !== finance.organization_id ||
         row.organization_stripe_account_id !== finance.organization_stripe_account_id
@@ -1057,21 +979,6 @@ export async function retryOutstandingSettlements(): Promise<number> {
     console.info(`[settlement] released ${released} outstanding share(s)`);
   }
   return released;
-}
-
-async function loadEventNames(
-  admin: SupabaseClient,
-  eventIds: string[]
-): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-  const unique = [...new Set(eventIds)];
-  if (unique.length === 0) return map;
-
-  const { data } = await admin.from("events").select("id, name").in("id", unique);
-  for (const row of (data ?? []) as { id: string; name: string }[]) {
-    map.set(row.id, row.name);
-  }
-  return map;
 }
 
 /**
