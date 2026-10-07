@@ -175,6 +175,25 @@ export async function POST(
     }
   }
 
+  // This event may already be settled: a DJ can close a night without having
+  // invited the organizer and link one afterwards. Point any existing
+  // settlement at the (now known) organization and Stripe account so the payout
+  // sweeps to the right place and the record shows who it belongs to. Failing
+  // here is not fatal -- the sweep re-resolves the live link on its own.
+  const { error: settleRefreshError } = await admin
+    .from("event_settlements")
+    .update({
+      organization_id: organizationId,
+      organization_stripe_account_id: stripeAccountId,
+    })
+    .eq("event_id", eventId);
+  if (settleRefreshError) {
+    console.warn(
+      "[invite-organizer] could not refresh the settlement:",
+      settleRefreshError
+    );
+  }
+
   let onboardingUrl: string;
   try {
     onboardingUrl = await createOrganizationOnboardingLink({

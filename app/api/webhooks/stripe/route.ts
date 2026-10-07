@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCreditPack, getStripe } from "@/lib/stripe";
+import { getCreditPack, getStripe, getStripeOrNull } from "@/lib/stripe";
 import { fetchDjConnectAccountUserId } from "@/lib/stripe-connect";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { readChargeFee, releaseHeldShares, retryOutstandingSettlements } from "@/lib/settlement";
 
 /**
  * POST /api/webhooks/stripe
@@ -34,7 +35,15 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
  *   - setup_intent.canceled
  *       → acknowledged; the profile keeps any previously saved card.
  *   - account.updated (v1) and the v2.core.account[*] family
- *       → link the connected account to its DJ.
+ *       → link the connected account to its DJ, and release any settlement
+ *         share that was held only because this account had not finished
+ *         onboarding.
+ *   - balance.available
+ *       → release settlement shares that were held only because our own
+ *         balance had not settled yet. Charges land in `pending` and only
+ *         become `available` days later, so an event closed today is normally
+ *         paid here rather than at close. This is the one event that tells us
+ *         the money has actually arrived.
  *
  * handlers are idempotent: updates are keyed by stable PKs / event values, so
  * a replayed event converges to the same state and any credit ledger writes
@@ -151,6 +160,7 @@ export async function POST(req: NextRequest) {
       if (accountId) {
         try {
           await linkConnectAccountToDj(accountId);
+          await releaseHeldShares(accountId);
         } catch (err) {
           console.error(`[webhook stripe] ${notification.type} handling failed:`, err);
           return NextResponse.json({ error: "Webhook handler error." }, { status: 500 });
@@ -299,6 +309,16 @@ export async function POST(req: NextRequest) {
             `[webhook stripe] Connect account ${account.id} details_submitted=${account.details_submitted} payouts_enabled=${account.payouts_enabled}`
           );
         }
+        // Runs whether or not the DJ link is known: an organizer's account has
+        // no metadata.user_id but can still be owed a held share.
+        await releaseHeldShares(account.id);
+        break;
+      }
+      case "balance.available": {
+        // Our own balance changed, so anything booked but not yet payable
+        // (waiting on funds to settle into `available`) may be payable now.
+        // Returns 0 without touching Stripe when it is not.
+        await retryOutstandingSettlements();
         break;
       }
       default:
@@ -352,8 +372,9 @@ async function linkConnectAccountToDj(accountId: string): Promise<void> {
  * Grants purchased credits and records the financial ledger row.
  *
  * Credits and revenue are stored in separate columns and must not be conflated:
- * a $20.00 pack grants 23 credits, but only $20.00 was collected, so the
- * 70/20/10 split must later be computed from revenue_cents alone.
+ * a $20.00 pack grants 23 credits, but only $20.00 was collected, so revenue is
+ * tracked on its own. The 70/20/10 split is later computed from revenue_cents
+ * minus Stripe's processing fee -- see settlement.ts.
  *
  * The grant is delegated to record_credit_purchase(), keyed on the Stripe
  * reference. Every path that can report a successful purchase -- the Checkout
@@ -417,4 +438,37 @@ async function fulfillCreditPurchase(
     `[webhook stripe] recorded ${reference}: ${data?.credits_granted ?? pack.credits} credits ` +
       `(${data?.revenue_cents ?? pack.revenueCents}c) for ${userId} on event ${eventId}`
   );
+
+  // Capture Stripe's fee now, while we already know the intent, so the event
+  // preview shows a net split instead of discovering the fees at close time.
+  // Settlement backfills anything missed here, so a failure is logged rather
+  // than raised -- the purchase itself was recorded successfully.
+  if (paymentIntentId && data?.id && !data.fee_cents) {
+    await recordPurchaseFee(data.id as string, paymentIntentId);
+  }
+}
+
+/**
+ * Best-effort write of the processing fee onto a recorded purchase.
+ *
+ * Never throws: the fee is a refinement of money already correctly recorded,
+ * and ensureStripeFees() re-reads any row still at 0 before it settles.
+ */
+async function recordPurchaseFee(purchaseId: string, paymentIntentId: string) {
+  const stripe = getStripeOrNull();
+  if (!stripe) return;
+  try {
+    const fee = await readChargeFee(stripe, paymentIntentId);
+    const { error } = await getSupabaseAdmin()
+      .from("credit_purchases")
+      .update({ fee_cents: fee })
+      .eq("id", purchaseId);
+    if (error) throw error;
+  } catch (err) {
+    console.warn(
+      `[webhook stripe] could not record the fee for ${paymentIntentId}; ` +
+        `settlement will re-read it:`,
+      err
+    );
+  }
 }

@@ -48,17 +48,33 @@ export async function PATCH(
 
   const { data: existing } = await supabase
     .from("events")
-    .select("id")
+    .select("id, dj_id")
     .eq("id", eventId)
     .maybeSingle();
   if (!existing) {
     return NextResponse.json({ error: "Event not found." }, { status: 404 });
+  }
+  if (existing.dj_id !== user.id) {
+    return NextResponse.json(
+      { error: "You don't have access to this event." },
+      { status: 403 }
+    );
+  }
+
+  // Ending a live event has to move money first, so it goes through settleEvent
+  // rather than a bare status flip. Everything else stays here.
+  if (status === "ended") {
+    return NextResponse.json(
+      { error: "Use the end-event flow to close this event." },
+      { status: 409 }
+    );
   }
 
   const { data, error } = await supabase
     .from("events")
     .update({ status })
     .eq("id", eventId)
+    .eq("dj_id", user.id)
     .select(EVENT_PROJECTION)
     .single();
 

@@ -15,12 +15,53 @@ import { getSupabaseClient } from "@/lib/supabase/client";
 /** Row shape returned by the event_finance() RPC. All money figures are cents. */
 interface EventFinance {
   total_revenue_cents: number;
+  total_fees_cents: number;
+  net_revenue_cents: number;
   purchase_count: number;
   purchaser_count: number;
   organizer_cents: number;
+  organizer_gross_cents: number;
+  organizer_fee_cents: number;
   dj_cents: number;
+  dj_gross_cents: number;
+  dj_fee_cents: number;
   platform_cents: number;
+  organizer_rate: number;
+  dj_rate: number;
+  platform_rate: number;
+  settled: boolean;
 }
+
+/** Per-recipient result from POST /api/dj/events/[eventId]/end. */
+interface SettlementResult {
+  status: "in_progress" | "settled" | "partial";
+  totalRevenueCents: number;
+  totalFeesCents: number;
+  netRevenueCents: number;
+  organizerCents: number;
+  organizerGrossCents: number;
+  organizerFeeCents: number;
+  djCents: number;
+  djGrossCents: number;
+  djFeeCents: number;
+  platformCents: number;
+  organizer: { status: "pending" | "held" | "sent" | "failed"; failureReason?: string | null };
+  dj: { status: "pending" | "held" | "sent" | "failed"; failureReason?: string | null };
+  alreadySettled: boolean;
+}
+
+const LEG_COPY: Record<
+  "pending" | "held" | "sent" | "failed",
+  { label: string; tone: string }
+> = {
+  sent: { label: "Transferred", tone: "text-neon" },
+  // One label covers both reasons a share can sit: the recipient had not
+  // finished onboarding, or our own balance had not settled yet. Both are
+  // retried automatically and neither loses money.
+  held: { label: "Held — sending automatically", tone: "text-amber-400" },
+  pending: { label: "Queued — sends after funds settle", tone: "text-amber-400" },
+  failed: { label: "Failed", tone: "text-red-400" },
+};
 
 export default function QueueManager({
   appUrl,
@@ -45,6 +86,8 @@ export default function QueueManager({
 
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showEndCharge, setShowEndCharge] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const [settlement, setSettlement] = useState<SettlementResult | null>(null);
   const [showLiveQr, setShowLiveQr] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
 
@@ -99,11 +142,20 @@ export default function QueueManager({
     if (!eventId) return;
     let ignore = false;
     (async () => {
-      const supabase = getSupabaseClient();
-      const { data } = await supabase.rpc("event_finance", { p_event_id: eventId });
-      if (ignore || !data) return;
-      const row = Array.isArray(data) ? data[0] : data;
-      if (row) setFinance(row as EventFinance);
+      try {
+        // The server reads any missing Stripe fees first, so the preview shows
+        // the real net split (previews of purchases captured before fee
+        // recording would otherwise read a $0.00 deduction).
+        const res = await fetch(`/api/dj/events/${eventId}/finance`);
+        if (!res.ok) return;
+        const body = (await res.json().catch(() => null)) as
+          | { finance?: EventFinance }
+          | null;
+        if (ignore || !body?.finance) return;
+        setFinance(body.finance);
+      } catch {
+        // The preview degrades to zeroed numbers rather than blocking the DJ.
+      }
     })();
     return () => {
       ignore = true;
@@ -111,9 +163,20 @@ export default function QueueManager({
   }, [eventContext?.id, tracks.length]);
 
   const collected = (finance?.total_revenue_cents ?? 0) / 100;
+  const fees = (finance?.total_fees_cents ?? 0) / 100;
+  // What Stripe actually leaves us. The three shares are cut from this, not
+  // from `collected`, because the processing fee is gone before any transfer
+  // can be drawn. Computed in cents so both fallbacks stay in one unit.
+  const net =
+    (finance?.net_revenue_cents ??
+      (finance?.total_revenue_cents ?? 0) - (finance?.total_fees_cents ?? 0)) / 100;
   const organizerCut = (finance?.organizer_cents ?? 0) / 100;
   const djCut = (finance?.dj_cents ?? 0) / 100;
   const bidabeatCut = (finance?.platform_cents ?? 0) / 100;
+  // Rates are per-event (events.organizer_rate / payout_rate), so never hardcode
+  // 70/20/10 in the copy — a negotiated gig can differ.
+  const pct = (rate: number | undefined, fallback: number) =>
+    `${Math.round((rate ?? fallback) * 1000) / 10}%`;
   const playedTracks = tracks.filter((t) => t.status === "played");
   const songsPlayed = playedTracks.length;
   const boardCount = tracks.filter((t) => t.status !== "played").length;
@@ -254,29 +317,39 @@ export default function QueueManager({
   };
 
   const endEvent = async () => {
-    if (!eventContext?.id) {
-      setShowEndCharge(false);
-      show("No live event to close.");
+    if (!eventContext?.id || ending) {
       return;
     }
+    setEnding(true);
     try {
-      const res = await fetch(`/api/dj/events/${eventContext.id}/status`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "ended" }),
+      // Not the generic status PATCH: closing a live event has to move the
+      // money first, so this runs settlement server-side and only then flips
+      // the event to ended. The response is idempotent, so a dropped reply
+      // can be retried without paying anyone twice.
+      const res = await fetch(`/api/dj/events/${eventContext.id}/end`, {
+        method: "POST",
       });
-      if (!res.ok) {
-        const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      const body = (await res.json().catch(() => null)) as
+        | { error?: string; settlement?: SettlementResult }
+        | null;
+
+      if (!res.ok || !body?.settlement) {
         throw new Error(body?.error || "Could not end the event.");
       }
+
       setShowEndCharge(false);
-      show("Event ended — DJ payout queued");
+      setSettlement(body.settlement);
+      if (body.settlement.alreadySettled) {
+        show("This night was already settled.");
+      }
     } catch (err) {
       show(
         `Something went wrong — ${
           err instanceof Error ? err.message : "please try again"
         }`
       );
+    } finally {
+      setEnding(false);
     }
   };
 
@@ -639,7 +712,8 @@ export default function QueueManager({
           <div className="mb-2 text-5xl">🚨</div>
           <div className="mb-1 font-display text-3xl tracking-[2px]">End Event?</div>
           <p className="mb-6 text-sm text-muted">
-            Ending tonight charges every guest&apos;s card for credits spent. This cannot be undone.
+            Ending the night totals the credits bought tonight and pays them out
+            to you and the organizer. This cannot be undone.
           </p>
           <div className="flex gap-3">
             <button
@@ -662,7 +736,7 @@ export default function QueueManager({
       </Modal>
 
       {/* ---- Charge breakdown ---- */}
-      <Modal open={showEndCharge} onClose={() => setShowEndCharge(false)}>
+      <Modal open={showEndCharge} onClose={() => !ending && setShowEndCharge(false)}>
         <div className="mb-1 font-display text-2xl tracking-[2px]">Settlement Preview</div>
         <p className="mb-4 text-xs text-muted">
           ${collected.toFixed(2)} collected from {finance?.purchase_count ?? 0} credit
@@ -674,29 +748,178 @@ export default function QueueManager({
             <span className="font-semibold">${collected.toFixed(2)}</span>
           </div>
           <div className="flex justify-between py-0.5">
-            <span className="text-muted">Organizer (70%)</span>
-            <span className="font-semibold text-accent">${organizerCut.toFixed(2)}</span>
+            <span className="text-muted">Stripe processing fees</span>
+            <span className="font-semibold text-muted">−${fees.toFixed(2)}</span>
           </div>
-          <div className="flex justify-between py-0.5">
-            <span className="text-muted">DJ share (20%)</span>
-            <span className="font-semibold text-neon">${djCut.toFixed(2)}</span>
+          <div className="flex justify-between border-t border-neon/20 py-0.5">
+            <span className="text-muted">Net to split</span>
+            <span className="font-semibold">${net.toFixed(2)}</span>
           </div>
-          <div className="flex justify-between py-0.5">
-            <span className="text-muted">BidaBeat (10%)</span>
+
+          {[
+            {
+              label: `Organizer (${pct(finance?.organizer_rate, 0.7)})`,
+              gross: (finance?.organizer_gross_cents ?? 0) / 100,
+              fee: (finance?.organizer_fee_cents ?? 0) / 100,
+              receive: organizerCut,
+              tone: "text-accent",
+            },
+            {
+              label: `DJ share (${pct(finance?.dj_rate, 0.2)})`,
+              gross: (finance?.dj_gross_cents ?? 0) / 100,
+              fee: (finance?.dj_fee_cents ?? 0) / 100,
+              receive: djCut,
+              tone: "text-neon",
+            },
+          ].map((party) => (
+            <div key={party.label} className="mt-2 border-t border-neon/20 pt-1">
+              <div className="flex justify-between py-0.5">
+                <span className="text-muted">{party.label}</span>
+                <span className="font-semibold text-muted">${party.gross.toFixed(2)} gross</span>
+              </div>
+              <div className="flex justify-between py-0.5 text-xs">
+                <span className="text-muted">Their share of Stripe fees</span>
+                <span className="text-muted">−${party.fee.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between py-0.5">
+                <span className="text-muted">Receives</span>
+                <span className={`font-semibold ${party.tone}`}>${party.receive.toFixed(2)}</span>
+              </div>
+            </div>
+          ))}
+
+          <div className="flex justify-between border-t border-neon/20 py-0.5">
+            <span className="text-muted">BidaBeat ({pct(finance?.platform_rate, 0.1)})</span>
             <span className="font-semibold text-muted">${bidabeatCut.toFixed(2)}</span>
           </div>
         </div>
         <p className="mb-4 text-[11px] leading-[1.6] text-muted">
           Guests were charged when they bought credits, so closing the event
-          moves no money from them. Payouts run to organizer and DJ bank
-          accounts after the event.
+          moves no money from them. Closing books the split; the organizer&apos;s{" "}
+          <span className="text-accent">${organizerCut.toFixed(2)}</span> and your{" "}
+          <span className="text-neon">${djCut.toFixed(2)}</span> are sent once the
+          funds settle (usually a few days), and each lands in its own payout
+          account and pays out on that account&apos;s schedule.
         </p>
         <button
           onClick={endEvent}
-          className="w-full rounded-xl bg-gradient-to-br from-neon-2 to-[#cc1155] px-4 py-3.5 font-display text-lg tracking-[2px] text-white transition active:scale-[0.99]"
+          disabled={ending}
+          className="w-full rounded-xl bg-gradient-to-br from-neon-2 to-[#cc1155] px-4 py-3.5 font-display text-lg tracking-[2px] text-white transition active:scale-[0.99] disabled:opacity-60"
         >
-          ⚡ RUN CHARGES & CLOSE NIGHT
+          {ending ? "Closing…" : "⚡ CLOSE NIGHT"}
         </button>
+      </Modal>
+
+      {/* ---- Settlement receipt ---- */}
+      <Modal open={!!settlement} onClose={() => setSettlement(null)}>
+        {settlement && (
+          <div>
+            <div className="mb-1 font-display text-2xl tracking-[2px]">Night Closed</div>
+            <p className="mb-4 text-xs text-muted">
+              ${(settlement.netRevenueCents / 100).toFixed(2)} to split after
+              ${(settlement.totalFeesCents / 100).toFixed(2)} in fees. The event is
+              ended; payouts send automatically once the funds settle.
+            </p>
+
+            <div className="mb-4 rounded-lg border border-edge bg-surface-2 p-3 text-sm">
+              <div className="flex justify-between py-0.5">
+                <span className="text-muted">Total collected</span>
+                <span className="font-semibold">
+                  ${(settlement.totalRevenueCents / 100).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between py-0.5">
+                <span className="text-muted">Stripe processing fees</span>
+                <span className="font-semibold text-muted">
+                  −${(settlement.totalFeesCents / 100).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-edge py-0.5">
+                <span className="text-muted">Net split</span>
+                <span className="font-semibold">
+                  ${(settlement.netRevenueCents / 100).toFixed(2)}
+                </span>
+              </div>
+
+              <div className="mt-2 border-t border-edge pt-2">
+                <div className="flex justify-between py-0.5 text-xs">
+                  <span className="text-accent">Organizer</span>
+                  <span className="font-semibold text-accent">
+                    ${(settlement.organizerCents / 100).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between py-0.5 text-[10px] text-muted">
+                  <span>Gross ${(settlement.organizerGrossCents / 100).toFixed(2)} · fees −${(settlement.organizerFeeCents / 100).toFixed(2)}</span>
+                  <span />
+                </div>
+                <div
+                  className={`text-right text-[11px] ${LEG_COPY[settlement.organizer.status].tone}`}
+                >
+                  {LEG_COPY[settlement.organizer.status].label}
+                </div>
+                {settlement.organizer.status !== "sent" &&
+                  settlement.organizer.failureReason && (
+                    <div className="text-right text-[11px] text-muted">
+                      {settlement.organizer.failureReason}
+                    </div>
+                  )}
+              </div>
+
+              <div className="mt-2 border-t border-edge pt-2">
+                <div className="flex justify-between py-0.5 text-xs">
+                  <span className="text-neon">You (DJ)</span>
+                  <span className="font-semibold text-neon">
+                    ${(settlement.djCents / 100).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between py-0.5 text-[10px] text-muted">
+                  <span>Gross ${(settlement.djGrossCents / 100).toFixed(2)} · fees −${(settlement.djFeeCents / 100).toFixed(2)}</span>
+                  <span />
+                </div>
+                <div
+                  className={`text-right text-[11px] ${LEG_COPY[settlement.dj.status].tone}`}
+                >
+                  {LEG_COPY[settlement.dj.status].label}
+                </div>
+                {settlement.dj.status !== "sent" && settlement.dj.failureReason && (
+                  <div className="text-right text-[11px] text-muted">
+                    {settlement.dj.failureReason}
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-2 border-t border-edge pt-2">
+                <div className="flex justify-between py-0.5 text-xs text-muted">
+                  <span>BidaBeat (platform)</span>
+                  <span className="font-semibold">
+                    ${(settlement.platformCents / 100).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {settlement.status !== "settled" && (
+              <p className="mb-4 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-[11px] leading-[1.6] text-amber-300">
+                Not every share went out yet. The night is still closed and
+                nothing is lost — pending and held shares send automatically
+                once the funds settle or the receiving account is ready, and a
+                failed transfer shows its reason above for someone to fix.
+              </p>
+            )}
+
+            <button
+              onClick={() => {
+                setSettlement(null);
+                // The event is over, so re-read the server state rather than
+                // leaving a live board pointing at a closed night.
+                window.location.reload();
+              }}
+              className="w-full rounded-xl bg-neon-2 px-4 py-3 text-sm font-bold text-white"
+            >
+              Done
+            </button>
+          </div>
+        )}
       </Modal>
 
       {/* ---- Seed song modal ---- */}
