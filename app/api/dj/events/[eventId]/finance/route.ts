@@ -63,5 +63,10 @@ export async function GET(
     return NextResponse.json({ error: "Could not total this event." }, { status: 500 });
   }
 
-  return NextResponse.json({ finance: financeRows[0] });
+  return NextResponse.json(
+    { finance: financeRows[0] },
+    // A cached purchase total is exactly the stale $0.00 the preview showed
+    // before a manual refresh, so this route is never stored.
+    { headers: { "Cache-Control": "no-store" } }
+  );
 }

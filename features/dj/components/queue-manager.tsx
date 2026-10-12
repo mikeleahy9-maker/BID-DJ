@@ -143,6 +143,13 @@ export default function QueueManager({
    * bought credits and never bid.
    */
   const [finance, setFinance] = useState<EventFinance | null>(null);
+  // Money changes without the queue changing: a guest can buy credits and bid
+  // on a song that is already on the board, which leaves `tracks.length` alone
+  // and would otherwise leave the totals at the $0 they read on first load.
+  // This nonce is bumped whenever the DJ opens the end-event flow, on tab
+  // focus, and on a slow poll, so the preview and the "Collected Tonight"
+  // figure re-read the server instead of showing a stale number.
+  const [financeNonce, setFinanceNonce] = useState(0);
 
   useEffect(() => {
     const eventId = eventContext?.id;
@@ -152,8 +159,11 @@ export default function QueueManager({
       try {
         // The server reads any missing Stripe fees first, so the preview shows
         // the real net split (previews of purchases captured before fee
-        // recording would otherwise read a $0.00 deduction).
-        const res = await fetch(`/api/dj/events/${eventId}/finance`);
+        // recording would otherwise read a $0.00 deduction). Sent no-store
+        // because a cached purchase total is exactly the stale $0.00 here.
+        const res = await fetch(`/api/dj/events/${eventId}/finance`, {
+          cache: "no-store",
+        });
         if (!res.ok) return;
         const body = (await res.json().catch(() => null)) as
           | { finance?: EventFinance }
@@ -167,7 +177,21 @@ export default function QueueManager({
     return () => {
       ignore = true;
     };
-  }, [eventContext?.id, tracks.length]);
+  }, [eventContext?.id, tracks.length, financeNonce]);
+
+  // Keep the collected figure honest while the night runs: refresh when the DJ
+  // comes back to the tab and on a slow poll, so a purchase made after load is
+  // reflected without needing the refresh that "fixed" it before.
+  useEffect(() => {
+    if (!eventContext?.id) return;
+    const refresh = () => setFinanceNonce((n) => n + 1);
+    window.addEventListener("focus", refresh);
+    const id = window.setInterval(refresh, 20000);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      window.clearInterval(id);
+    };
+  }, [eventContext?.id]);
 
   const collected = (finance?.total_revenue_cents ?? 0) / 100;
   const fees = (finance?.total_fees_cents ?? 0) / 100;
@@ -464,7 +488,12 @@ export default function QueueManager({
         </div>
         <div className="ml-auto flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
           <button
-            onClick={() => setShowEndConfirm(true)}
+            onClick={() => {
+              // Re-read the purchases before the DJ commits: the preview is
+              // about to be shown and must not be the mount-time $0.
+              setFinanceNonce((n) => n + 1);
+              setShowEndConfirm(true);
+            }}
             disabled={helperMode}
             title={helperMode ? "Only the event owner can end the event" : undefined}
             className={`rounded-lg px-4 py-2 text-xs font-bold text-white transition ${
@@ -740,6 +769,9 @@ export default function QueueManager({
             </button>
             <button
               onClick={() => {
+                // Refresh again at the modal that actually shows the split, in
+                // case a purchase landed during the confirm step.
+                setFinanceNonce((n) => n + 1);
                 setShowEndConfirm(false);
                 setShowEndCharge(true);
               }}
