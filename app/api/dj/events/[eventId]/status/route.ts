@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentUser, getSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { fetchDjConnectAccountStatus } from "@/lib/stripe-connect";
 import { EVENT_PROJECTION } from "@/features/dj/lib/dj-events";
 
 const VALID_STATUSES = ["draft", "live", "ended", "canceled"];
@@ -48,7 +50,7 @@ export async function PATCH(
 
   const { data: existing } = await supabase
     .from("events")
-    .select("id, dj_id")
+    .select("id, dj_id, status, organization_id")
     .eq("id", eventId)
     .maybeSingle();
   if (!existing) {
@@ -70,6 +72,16 @@ export async function PATCH(
     );
   }
 
+  // Going live puts guest money in play, and the split always owes the
+  // organizer their share. Refuse until that organizer exists and can actually
+  // receive a transfer, otherwise the close flow can only ever hold their money.
+  if (status === "live" && existing.status !== "live") {
+    const reason = await organizerNotReadyReason(existing.organization_id);
+    if (reason) {
+      return NextResponse.json({ error: reason }, { status: 409 });
+    }
+  }
+
   const { data, error } = await supabase
     .from("events")
     .update({ status })
@@ -87,4 +99,41 @@ export async function PATCH(
   }
 
   return NextResponse.json({ ok: true, event: data });
+}
+
+/**
+ * Why the event's organizer is not ready to be paid, or null when they are.
+ *
+ * The settlement always books a 70% organizer share, so an event that goes live
+ * without a payable organizer can only close as a hold. Checked live against
+ * Stripe (the same predicate the settlement engine uses) rather than the
+ * organizations.status column, which can lag behind a webhook.
+ */
+async function organizerNotReadyReason(
+  organizationId: string | null
+): Promise<string | null> {
+  if (!organizationId) {
+    return "Invite the event organizer first — they receive the event's non-DJ share.";
+  }
+
+  const { data: org } = await getSupabaseAdmin()
+    .from("organizations")
+    .select("stripe_account_id")
+    .eq("id", organizationId)
+    .maybeSingle();
+  if (!org?.stripe_account_id) {
+    return "The event organizer has not started Stripe onboarding yet.";
+  }
+
+  try {
+    const status = await fetchDjConnectAccountStatus(org.stripe_account_id);
+    if (!status.connected) {
+      return "The event organizer must finish Stripe onboarding before this event can go live.";
+    }
+  } catch (err) {
+    console.error("[event-status] could not check organizer readiness:", err);
+    return "Could not verify the organizer's payout setup. Please try again.";
+  }
+
+  return null;
 }

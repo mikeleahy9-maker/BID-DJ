@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
@@ -94,6 +94,8 @@ export default function EventSetupPanel({
   const [showDelete, setShowDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [goingLive, setGoingLive] = useState(false);
+  // null = not known yet (or the check failed); false = organizer cannot be paid.
+  const [organizerReady, setOrganizerReady] = useState<boolean | null>(null);
 
   useEffect(() => {
     return () => {
@@ -101,6 +103,27 @@ export default function EventSetupPanel({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const refreshOrganizer = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/dj/events/${row.id}/organizers`);
+      const json = await res.json().catch(() => ({}));
+      setOrganizerReady(json?.organizer?.ready === true);
+    } catch {
+      setOrganizerReady(null);
+    }
+  }, [row.id]);
+
+  // The organizer finishes onboarding in their own tab, so re-check whenever the
+  // DJ comes back to this one.
+  useEffect(() => {
+    const id = setTimeout(refreshOrganizer, 0);
+    window.addEventListener("focus", refreshOrganizer);
+    return () => {
+      clearTimeout(id);
+      window.removeEventListener("focus", refreshOrganizer);
+    };
+  }, [refreshOrganizer]);
 
   const goLive = async () => {
     setGoingLive(true);
@@ -502,18 +525,31 @@ export default function EventSetupPanel({
 
         <button
           onClick={goLive}
-          disabled={goingLive}
-          className="block w-full rounded-xl bg-gradient-to-br from-neon to-[#00c9b1] px-4 py-3.5 text-center font-display text-lg tracking-[2px] text-bg shadow-[0_0_20px_rgba(0,255,225,0.2)] transition active:scale-[0.99] disabled:opacity-60"
+          disabled={goingLive || (row.status !== "live" && organizerReady === false)}
+          title={
+            row.status !== "live" && organizerReady === false
+              ? "Invite the organizer and have them finish Stripe onboarding first"
+              : undefined
+          }
+          className="block w-full rounded-xl bg-gradient-to-br from-neon to-[#00c9b1] px-4 py-3.5 text-center font-display text-lg tracking-[2px] text-bg shadow-[0_0_20px_rgba(0,255,225,0.2)] transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
         >
           {goingLive
             ? "Starting live…"
             : row.status === "live"
               ? "● LIVE — OPEN QUEUE"
-              : "▶ GO LIVE WITH THIS EVENT"}
+              : organizerReady === false
+                ? "🔒 ORGANIZER ONBOARDING REQUIRED"
+                : "▶ GO LIVE WITH THIS EVENT"}
         </button>
+        {row.status !== "live" && organizerReady === false && (
+          <p className="mt-2 text-center text-[11px] text-muted">
+            Invite the organizer below and have them finish their Stripe payout
+            setup before this event can go live.
+          </p>
+        )}
       </div>
 
-      <OrganizerInvite eventId={dbRow.id} />
+      <OrganizerInvite eventId={dbRow.id} onChange={refreshOrganizer} />
 
       {/* ---- Edit event modal ---- */}
       <Modal open={showEdit} onClose={() => setShowEdit(false)}>

@@ -124,29 +124,21 @@ function balanceCapability(
 }
 
 /**
- * Live onboarding state for a connected account.
+ * Derives the onboarding state from an already-fetched v2 account.
  *
  * Accounts v2 has no `details_submitted` / `payouts_enabled` booleans: a v1
  * `accounts.retrieve` on a v2 account returns `false` for both even while
  * onboarding is healthy, so the truth has to come from the v2 capability
  * statuses under `configuration.recipient`.
  */
-export async function fetchDjConnectAccountStatus(
-  accountId: string
-): Promise<DjConnectAccountStatus> {
-  const account = await getStripe().v2.core.accounts.retrieve(accountId, {
-    include: ["requirements", "configuration.recipient"],
-  });
-
+function accountStatusOf(account: Stripe.V2.Core.Account): DjConnectAccountStatus {
   const requirements = account.requirements?.entries ?? [];
   const pendingRequirements = requirements.map((e) => e.description).filter(Boolean);
   const detailsSubmitted = requirements.length === 0;
 
-  const payoutsStatus = balanceCapability(account, "payouts")?.status;
-  const transfersStatus = balanceCapability(account, "stripe_transfers")?.status;
-
-  const payoutsEnabled = payoutsStatus === "active";
-  const transfersEnabled = transfersStatus === "active";
+  const payoutsEnabled = balanceCapability(account, "payouts")?.status === "active";
+  const transfersEnabled =
+    balanceCapability(account, "stripe_transfers")?.status === "active";
 
   return {
     recipientApplied: account.configuration?.recipient?.applied === true,
@@ -158,10 +150,65 @@ export async function fetchDjConnectAccountStatus(
   };
 }
 
-/** Reads the DJ's auth user id back off the connected account's metadata. */
-export async function fetchDjConnectAccountUserId(accountId: string): Promise<string | null> {
-  const account = await getStripe().v2.core.accounts.retrieve(accountId);
-  return account.metadata?.user_id ?? null;
+/** Live onboarding state for a connected account. */
+export async function fetchDjConnectAccountStatus(
+  accountId: string
+): Promise<DjConnectAccountStatus> {
+  const account = await getStripe().v2.core.accounts.retrieve(accountId, {
+    include: ["requirements", "configuration.recipient"],
+  });
+  return accountStatusOf(account);
+}
+
+/**
+ * Onboarding state as persisted on `dj_owner_profiles.connect_status` and on
+ * `organizations.status`. `onboarded` means Stripe will let the account hold a
+ * balance and receive transfers, i.e. it can be paid a settlement share;
+ * `suspended` is only set when the account is closed.
+ */
+export type ConnectOnboardingStatus =
+  | "not_started"
+  | "pending"
+  | "onboarded"
+  | "suspended";
+
+export function connectStatusFromAccount(
+  status: DjConnectAccountStatus,
+  closed = false
+): Exclude<ConnectOnboardingStatus, "not_started"> {
+  if (closed) return "suspended";
+  return status.connected ? "onboarded" : "pending";
+}
+
+export interface ConnectedAccountSnapshot {
+  /** DJ owner (auth user id) from metadata, when this is a DJ account. */
+  userId: string | null;
+  /** Organization id from metadata, when this is an organizer account. */
+  organizationId: string | null;
+  /** Live capability state of the account. */
+  status: DjConnectAccountStatus;
+}
+
+/**
+ * One retrieve that answers both "who owns this account" and its live onboarding
+ * state, so a webhook does not pay for two round-trips.
+ *
+ * Account metadata ties the account back to a DJ (`user_id`) or an organizer
+ * (`organization_id`); the capability status is the same signal the settlement
+ * engine uses to decide a share is payable rather than held.
+ */
+export async function fetchConnectedAccountSnapshot(
+  accountId: string
+): Promise<ConnectedAccountSnapshot> {
+  const account = await getStripe().v2.core.accounts.retrieve(accountId, {
+    include: ["requirements", "configuration.recipient"],
+  });
+  const metadata = account.metadata ?? {};
+  return {
+    userId: metadata.user_id ?? null,
+    organizationId: metadata.organization_id ?? null,
+    status: accountStatusOf(account),
+  };
 }
 
 /**

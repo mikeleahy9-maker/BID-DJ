@@ -10,10 +10,13 @@ interface OrganizerState {
   status: string;
   onboardedAt: string | null;
   hasStripeAccount: boolean;
+  ready: boolean;
 }
 
 interface OrganizerInviteProps {
   eventId: string;
+  /** Called after a successful invite so a parent can re-check readiness. */
+  onChange?: () => void;
 }
 
 const STATUS_COPY: Record<string, string> = {
@@ -22,7 +25,7 @@ const STATUS_COPY: Record<string, string> = {
   suspended: "Suspended by Stripe",
 };
 
-export default function OrganizerInvite({ eventId }: OrganizerInviteProps) {
+export default function OrganizerInvite({ eventId, onChange }: OrganizerInviteProps) {
   const { show, toastNode } = useToast();
   const [organizer, setOrganizer] = useState<OrganizerState | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -68,6 +71,7 @@ export default function OrganizerInvite({ eventId }: OrganizerInviteProps) {
       }
       setInviteUrl(json.onboardingUrl);
       show("Organizer invited.");
+      onChange?.();
     } catch (err) {
       show(err instanceof Error ? err.message : "Could not invite the organizer.");
     } finally {

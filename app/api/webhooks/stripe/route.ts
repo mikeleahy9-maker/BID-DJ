@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCreditPack, getStripe, getStripeOrNull } from "@/lib/stripe";
-import { fetchDjConnectAccountUserId } from "@/lib/stripe-connect";
+import {
+  fetchConnectedAccountSnapshot,
+  connectStatusFromAccount,
+  type ConnectedAccountSnapshot,
+} from "@/lib/stripe-connect";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { readChargeFee, retryOutstandingSettlements } from "@/lib/settlement";
 
@@ -159,7 +163,10 @@ export async function POST(req: NextRequest) {
       const accountId = relatedObjectId(notification);
       if (accountId) {
         try {
-          await linkConnectAccountToDj(accountId);
+          await syncConnectedAccount(
+            accountId,
+            notification.type === "v2.core.account.closed"
+          );
           // The account just became payable (onboarding finished). Hand the
           // transfer back to the single ordering engine: it releases held
           // shares oldest-event-first, exactly like the cron and
@@ -308,7 +315,19 @@ export async function POST(req: NextRequest) {
         };
         const userId = account.metadata?.user_id;
         if (userId) {
-          await saveConnectAccountForDj(userId, account.id);
+          // A v1 payload has no transfers capability, so `payouts_enabled` is
+          // the closest available proxy for "can be paid". Only legacy accounts
+          // reach this branch; live accounts go through the v2 path above.
+          const v1Status: ConnectedAccountSnapshot["status"] = {
+            recipientApplied: true,
+            detailsSubmitted: account.details_submitted === true,
+            payoutsEnabled: account.payouts_enabled === true,
+            transfersEnabled: account.payouts_enabled === true,
+            connected:
+              account.details_submitted === true && account.payouts_enabled === true,
+            pendingRequirements: [],
+          };
+          await saveConnectAccountForDj(userId, account.id, v1Status, false);
           console.info(
             `[webhook stripe] Connect account ${account.id} details_submitted=${account.details_submitted} payouts_enabled=${account.payouts_enabled}`
           );
@@ -341,37 +360,125 @@ export async function POST(req: NextRequest) {
 
 type StripePaymentIntentRef = { id: string };
 
-/** Upserts the connected account onto its DJ, keyed by the auth user id. */
+/**
+ * Upserts the connected account onto its DJ, keyed by the auth user id, and
+ * mirrors the account's onboarding state onto the row.
+ *
+ * `connect_onboarded_at` is stamped on the first transition into 'onboarded' and
+ * then left alone, so later webhooks do not reset the date.
+ */
 async function saveConnectAccountForDj(
   userId: string,
-  connectId: string
+  connectId: string,
+  status: ConnectedAccountSnapshot["status"],
+  closed: boolean
 ): Promise<void> {
-  const { error } = await getSupabaseAdmin()
+  const admin = getSupabaseAdmin();
+  const nextStatus = connectStatusFromAccount(status, closed);
+  const now = new Date().toISOString();
+
+  const { data: existing } = await admin
     .from("dj_owner_profiles")
-    .upsert(
-      { user_id: userId, stripe_connect_id: connectId },
-      { onConflict: "user_id" }
-    );
+    .select("connect_onboarded_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  const onboardedAt =
+    nextStatus === "onboarded"
+      ? (existing?.connect_onboarded_at ?? now)
+      : existing?.connect_onboarded_at ?? null;
+
+  const { error } = await admin.from("dj_owner_profiles").upsert(
+    {
+      user_id: userId,
+      stripe_connect_id: connectId,
+      connect_status: nextStatus,
+      connect_onboarded_at: onboardedAt,
+      connect_updated_at: now,
+    },
+    { onConflict: "user_id" }
+  );
   if (error) throw error;
 }
 
 /**
- * Resolves a v2 connected account's DJ from its metadata and links them.
+ * Resolves a v2 connected account to the DJ or organizer it belongs to and
+ * reflects the account's onboarding state.
  *
  * v2 notifications carry no account snapshot, so the owner has to be read back
- * from Stripe; the metadata written at account creation is what ties the
- * account to a user.
+ * from Stripe; the metadata written at account creation (role plus user_id /
+ * organization_id) is what ties the account to a DJ or an organization.
  */
-async function linkConnectAccountToDj(accountId: string): Promise<void> {
-  const userId = await fetchDjConnectAccountUserId(accountId);
-  if (!userId) {
-    console.warn(
-      `[webhook stripe] connected account ${accountId} has no metadata.user_id; ignoring.`
+async function syncConnectedAccount(
+  accountId: string,
+  closed: boolean
+): Promise<void> {
+  const snapshot = await fetchConnectedAccountSnapshot(accountId);
+
+  if (snapshot.userId) {
+    await saveConnectAccountForDj(
+      snapshot.userId,
+      accountId,
+      snapshot.status,
+      closed
     );
+    console.info(
+      `[webhook stripe] linked connected account ${accountId} to ${snapshot.userId}`
+    );
+  }
+
+  if (snapshot.organizationId) {
+    await syncOrganizationOnboarding(snapshot.organizationId, snapshot.status, closed);
+  }
+}
+
+/**
+ * Mirrors an organizer account's onboarding state onto `organizations`.
+ *
+ * A closed account becomes 'suspended'; an account that Stripe will fully pay
+ * (balance + transfers) becomes 'onboarded' without resetting an existing
+ * `onboarded_at`. Anything still in progress leaves the row as 'invited', and a
+ * later event that is not a closure never downgrades an onboarded organizer --
+ * capability flaps are handled by the account itself, not by un-onboarding.
+ */
+async function syncOrganizationOnboarding(
+  organizationId: string,
+  status: ConnectedAccountSnapshot["status"],
+  closed: boolean
+): Promise<void> {
+  const admin = getSupabaseAdmin();
+  const now = new Date().toISOString();
+
+  if (closed) {
+    const { error } = await admin
+      .from("organizations")
+      .update({ status: "suspended", updated_at: now })
+      .eq("id", organizationId)
+      .neq("status", "suspended");
+    if (error) throw error;
+    console.info(`[webhook stripe] organizer ${organizationId} suspended`);
     return;
   }
-  await saveConnectAccountForDj(userId, accountId);
-  console.info(`[webhook stripe] linked connected account ${accountId} to ${userId}`);
+
+  if (!status.connected) return;
+
+  const { data: existing } = await admin
+    .from("organizations")
+    .select("onboarded_at")
+    .eq("id", organizationId)
+    .maybeSingle();
+
+  const { error } = await admin
+    .from("organizations")
+    .update({
+      status: "onboarded",
+      onboarded_at: existing?.onboarded_at ?? now,
+      updated_at: now,
+    })
+    .eq("id", organizationId)
+    .neq("status", "onboarded");
+  if (error) throw error;
+  console.info(`[webhook stripe] organizer ${organizationId} onboarded`);
 }
 
 /**

@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/supabase/server";
 import {
   createOrganizationConnectAccount,
   createOrganizationOnboardingLink,
+  fetchDjConnectAccountStatus,
 } from "@/lib/stripe-connect";
 
 const UUID_RE =
@@ -18,6 +19,8 @@ interface OrganizerSummary {
   status: string;
   onboardedAt: string | null;
   hasStripeAccount: boolean;
+  /** Live truth: the account can receive destination transfers right now. */
+  ready: boolean;
 }
 
 /**
@@ -264,13 +267,38 @@ export async function GET(
     return NextResponse.json({ organizer: null });
   }
 
+  // The webhook flips the row, but an organizer who finished before that was
+  // wired (or whose event landed mid-flight) would otherwise read as 'invited'
+  // forever. Reading the live account here reconciles the row on read. "Ready"
+  // means Stripe will fully pay the account (balance + transfers active).
+  let ready = false;
+  if (org.stripe_account_id) {
+    try {
+      const status = await fetchDjConnectAccountStatus(org.stripe_account_id);
+      ready = status.connected;
+    } catch (err) {
+      console.warn("[organizers] could not read the connect status:", err);
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  const onboardedAt = ready ? (org.onboarded_at ?? nowIso) : org.onboarded_at;
+  if (ready && org.status !== "onboarded") {
+    const { error } = await admin
+      .from("organizations")
+      .update({ status: "onboarded", onboarded_at: onboardedAt, updated_at: nowIso })
+      .eq("id", org.id);
+    if (error) console.warn("[organizers] could not mark onboarded:", error);
+  }
+
   const organizer: OrganizerSummary = {
     id: org.id,
     name: org.name,
     email: org.contact_email,
-    status: org.status,
-    onboardedAt: org.onboarded_at,
+    status: ready ? "onboarded" : org.status,
+    onboardedAt,
     hasStripeAccount: Boolean(org.stripe_account_id),
+    ready,
   };
 
   return NextResponse.json({ organizer });

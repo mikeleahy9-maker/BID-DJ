@@ -50,10 +50,17 @@ export async function POST(_req: NextRequest) {
       });
 
       // Upsert: first Connect setup, or a row created earlier without a key.
+      // Seed the mirrored status as 'pending' so the row is correct even before
+      // the account.created webhook lands (e.g. in local dev without webhooks).
       const { error } = await supabase
         .from("dj_owner_profiles")
         .upsert(
-          { user_id: user.id, stripe_connect_id: connectId },
+          {
+            user_id: user.id,
+            stripe_connect_id: connectId,
+            connect_status: "pending",
+            connect_updated_at: new Date().toISOString(),
+          },
           { onConflict: "user_id" }
         );
       if (error) throw error;
