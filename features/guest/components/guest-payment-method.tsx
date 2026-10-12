@@ -11,8 +11,8 @@ import { useToast } from "@/components/ui/use-toast";
  *
  * Shows the card currently on file and lets the guest replace it. The new card
  * goes through the same SetupIntent flow as signup: CardSetupForm collects the
- * card + billing address, then confirm-card writes the new payment method to
- * the profile. After a successful swap the dashboard refreshes.
+ * card, then confirm-card writes the new payment method to the profile. After
+ * a successful swap the dashboard refreshes.
  */
 export function GuestPaymentMethod({
   card,
@@ -72,15 +72,6 @@ export function GuestPaymentMethod({
     setupIntentId,
   }: {
     setupIntentId: string;
-    billing: {
-      name: string;
-      line1: string;
-      line2: string;
-      city: string;
-      state: string;
-      postalCode: string;
-      country: string;
-    } | null;
   }) => {
     setSaving(true);
     try {
@@ -194,7 +185,6 @@ export function GuestPaymentMethod({
                 clientSecret={clientSecret}
                 returnUrl={undefined}
                 elementClassName=""
-                collectBillingDetails
                 submitLabel={card.saved ? "REPLACE CARD →" : "SAVE CARD →"}
                 onSaved={handleSaved}
                 footer="Your card is saved securely via Stripe. You are only charged when you buy credits."

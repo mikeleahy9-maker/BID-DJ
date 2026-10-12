@@ -247,8 +247,6 @@ export default function SignupForm() {
         <CardSetupForm
           clientSecret={clientSecret}
           returnUrl={`${window.location.origin}/signup?setup=complete`}
-          collectBillingDetails
-          defaultBillingName={`${firstName.trim()} ${lastName.trim()}`.trim()}
           onSaved={async ({ setupIntentId }) => {
             // Guest accounts are auto-confirmed at signup (email_confirm: true),
             // so we can sign them in immediately — no manual login.
