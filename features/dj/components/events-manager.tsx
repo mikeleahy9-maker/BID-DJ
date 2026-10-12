@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Modal } from "@/components/ui/modal";
+import { Pagination } from "@/components/ui/pagination";
 import { useToast } from "@/components/ui/use-toast";
 import {
   EVENT_PALETTES,
@@ -30,6 +31,8 @@ const EMPTY_FORM = {
   palette: "noir",
 };
 
+const RECENT_PAGE_SIZE = 8;
+
 export default function EventsManager({
   initialEvents,
   recentEvents,
@@ -42,6 +45,17 @@ export default function EventsManager({
   const [showCreate, setShowCreate] = useState(false);
   const [goingLiveId, setGoingLiveId] = useState<string | null>(null);
   const liveExists = events.some((ev) => ev.status === "live");
+
+  // Recent (ended) gigs are paged client-side; the server sends them all.
+  const [recentPage, setRecentPage] = useState(1);
+  const recentPageCount = Math.max(
+    1,
+    Math.ceil(recentEvents.length / RECENT_PAGE_SIZE)
+  );
+  const recentSlice = recentEvents.slice(
+    (recentPage - 1) * RECENT_PAGE_SIZE,
+    recentPage * RECENT_PAGE_SIZE
+  );
 
   // ---- Stripe Connect onboarding ----
   const [connecting, setConnecting] = useState(false);
@@ -381,9 +395,9 @@ export default function EventsManager({
                 No past gigs yet — ended events will show up here
               </p>
             )}
-            {recentEvents.map((ev) => (
+            {recentSlice.map((ev, i) => (
               <div
-                key={ev.name}
+                key={`${ev.name}-${ev.date}-${i}`}
                 className="flex items-center gap-3 border-b border-edge px-4 py-3 last:border-b-0"
               >
                 <div className="min-w-0 flex-1">
@@ -393,6 +407,17 @@ export default function EventsManager({
                 <div className="font-display text-lg text-neon">${ev.earned.toFixed(2)}</div>
               </div>
             ))}
+            {recentEvents.length > RECENT_PAGE_SIZE && (
+              <div className="px-4 pb-4">
+                <Pagination
+                  page={recentPage}
+                  pageCount={recentPageCount}
+                  onChange={setRecentPage}
+                  total={recentEvents.length}
+                  pageSize={RECENT_PAGE_SIZE}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

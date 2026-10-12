@@ -16,8 +16,8 @@ import { getCurrentUser } from "@/lib/supabase/server";
  * A leg only counts toward the total when `dj_status = 'sent'`; held/pending/
  * failed legs are shown in the breakdown but never added to it.
  *
- * Songs and guests are the same window: 'played' live-queue requests and
- * attendee rows belonging to those events.
+ * Songs and guests are the same window: 'played' live-queue tracks
+ * (event_tracks) and attendee rows belonging to those events.
  */
 const PERIODS = new Set(["week", "month", "year", "all"]);
 
@@ -108,13 +108,14 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Songs actually played (the live queue's terminal 'played' state) and
-  // guests (one attendees row per guest) for the same window's events.
+  // Songs actually played (the live board's terminal 'played' state on
+  // event_tracks -- guest requests stop at 'approved' and never reach
+  // 'played') and guests (one attendees row per guest) for the same window.
   let songsByEvent = new Map<string, number>();
   let guestsByEvent = new Map<string, number>();
   if (eventIds.length > 0) {
     const { data: played } = await supabase
-      .from("requests")
+      .from("event_tracks")
       .select("event_id, id")
       .in("event_id", eventIds)
       .eq("status", "played");

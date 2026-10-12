@@ -27,24 +27,30 @@ async function getRecentGigs(
     .select("id, name, event_date")
     .eq("dj_id", userId)
     .eq("status", "ended")
-    .order("event_date", { ascending: false })
-    .limit(20);
+    .order("event_date", { ascending: false });
 
   if (!pastRows || pastRows.length === 0) return [];
 
   const ids = pastRows.map((row) => row.id as string);
 
-  const [songsResult, tipsResult] = await Promise.all([
+  // Songs played is the live board's terminal state (event_tracks.status =
+  // 'played'), not guest requests -- requests stop at 'approved' and are never
+  // marked played, so counting them always returned 0.
+  //
+  // Earned is the NET amount the DJ actually received for the event
+  // (event_settlements.dj_cents), the same figure the earnings page shows;
+  // only legs that actually moved (dj_status = 'sent') count. The old tip-based
+  // sum used tips.status = 'released', which nothing ever sets, so it was 0 too.
+  const [songsResult, settlementsResult] = await Promise.all([
     supabase
-      .from("requests")
+      .from("event_tracks")
       .select("event_id")
       .in("event_id", ids)
       .eq("status", "played"),
     supabase
-      .from("tips")
-      .select("event_id, amount_cents")
-      .in("event_id", ids)
-      .eq("status", "released"),
+      .from("event_settlements")
+      .select("event_id, dj_cents, dj_status")
+      .in("event_id", ids),
   ]);
 
   const songsByEvent = new Map<string, number>();
@@ -54,12 +60,10 @@ async function getRecentGigs(
   }
 
   const earnedCentsByEvent = new Map<string, number>();
-  for (const row of tipsResult.data ?? []) {
+  for (const row of settlementsResult.data ?? []) {
+    if (row.dj_status !== "sent") continue;
     const id = row.event_id as string;
-    earnedCentsByEvent.set(
-      id,
-      (earnedCentsByEvent.get(id) ?? 0) + Number(row.amount_cents ?? 0)
-    );
+    earnedCentsByEvent.set(id, Number(row.dj_cents ?? 0));
   }
 
   return pastRows.map((row) => ({
@@ -79,6 +83,7 @@ export default async function DJEventsPage() {
     .from("events")
     .select(EVENT_PROJECTION)
     .eq("dj_id", userId)
+    .in("status", ["draft", "live"])
     .order("created_at", { ascending: false });
   const profileRequest = user
     ? supabase
