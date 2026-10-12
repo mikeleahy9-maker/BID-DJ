@@ -9,6 +9,9 @@ import { InfiniteScrollLoader } from "@/features/dj/components/infinite-scroll-l
 import { useInfiniteSongSearch } from "@/features/dj/lib/use-infinite-song-search";
 import { PRICING, REFUND_REASONS, SeedSong } from "@/features/dj/data";
 import { LiveBoard } from "@/features/live/components/live-board";
+import { EventEndedOverlay } from "@/features/live/components/event-ended-overlay";
+import { broadcastEventClosed } from "@/features/live/lib/broadcast-event-closed";
+import { useEventClosed } from "@/features/live/lib/use-event-closed";
 import { useLiveQueue, type LiveTrack } from "@/features/live/lib/use-live-queue";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
@@ -125,6 +128,10 @@ export default function QueueManager({
     removeTrackLocal,
     refundTrack,
   } = useLiveQueue(eventContext?.id ?? "");
+
+  // A helper working the queue must be closed out if the DJ ends the event from
+  // their own device. The owner drives the close, so only helper mode overlays.
+  const eventClosed = useEventClosed(helperMode ? (eventContext?.id ?? "") : "");
 
   /**
    * Money for the event comes from credit PURCHASES, not from board activity.
@@ -339,6 +346,9 @@ export default function QueueManager({
 
       setShowEndCharge(false);
       setSettlement(body.settlement);
+      // Let every guest and helper still on the event close their page; safe to
+      // fire-and-forget, since they also re-check the event on focus/interval.
+      void broadcastEventClosed(eventContext.id);
       if (body.settlement.alreadySettled) {
         show("This night was already settled.");
       }
@@ -369,6 +379,12 @@ export default function QueueManager({
     a.click();
     document.body.removeChild(a);
   };
+
+  if (helperMode && eventClosed) {
+    return (
+      <EventEndedOverlay audience="helper" redirectTo="/helper-queue/signout" />
+    );
+  }
 
   if (!eventContext) {
     return (

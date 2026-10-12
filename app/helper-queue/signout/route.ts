@@ -15,3 +15,9 @@ export async function POST() {
   });
   return res;
 }
+
+// The end-of-event overlay redirects the helper here, so the cookie still gets
+// cleared even though the navigation is a plain GET followed by the browser.
+export function GET() {
+  return POST();
+}

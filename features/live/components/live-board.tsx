@@ -32,7 +32,7 @@ export function LiveBoard({
   }
 
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex max-h-[60vh] flex-col gap-2.5 overflow-y-auto overscroll-contain pr-1">
       {list.map((t, i) => {
         const isTop = i === 0;
         const bar = isTop ? "#ffe600" : RANK_BARS[i] ?? "#2a2a2a";
@@ -41,7 +41,7 @@ export function LiveBoard({
           return (
             <div
               key={t.id}
-              className="relative flex flex-col gap-3 overflow-hidden rounded-xl border border-edge bg-surface p-3.5 sm:flex-row sm:items-center"
+              className="relative flex shrink-0 flex-col gap-3 overflow-hidden rounded-xl border border-edge bg-surface p-3.5 sm:flex-row sm:items-center"
             >
               <span
                 className="absolute inset-y-0 left-0 w-[3px]"
@@ -87,7 +87,7 @@ export function LiveBoard({
         return (
           <div
             key={t.id}
-            className={`relative flex items-start gap-3 overflow-hidden rounded-xl border bg-surface p-3.5 ${
+            className={`relative flex shrink-0 items-start gap-3 overflow-hidden rounded-xl border bg-surface p-3.5 ${
               isTop ? "border-neon-3/25" : "border-edge"
             }`}
           >

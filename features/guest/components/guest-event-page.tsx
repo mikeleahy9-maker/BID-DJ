@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageContainer } from "@/components/layout/page-container";
+import { EventEndedOverlay } from "@/features/live/components/event-ended-overlay";
+import { useEventClosed } from "@/features/live/lib/use-event-closed";
 import { GuestHireModal } from "./guest-hire-modal";
 import { useGuestBoard } from "../lib/use-guest-board";
 
@@ -52,11 +54,18 @@ export function GuestEventPage({
     top: event.top,
   });
 
+  // Closes the landing page out the moment the DJ ends the event.
+  const eventEnded = useEventClosed(event.id);
+
   const stats = [
     { value: `${queueCount}`, label: "Songs in Queue" },
     { value: `${guestsBidding}`, label: "Guests Bidding" },
     { value: "💎", label: "Live Now" },
   ];
+
+  if (eventEnded) {
+    return <EventEndedOverlay redirectTo="/dashboard" />;
+  }
 
   return (
     <div className="min-h-full">

@@ -7,6 +7,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { Modal } from "@/components/ui/modal";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import { LiveBoard } from "@/features/live/components/live-board";
+import { EventEndedOverlay } from "@/features/live/components/event-ended-overlay";
+import { useEventClosed } from "@/features/live/lib/use-event-closed";
 import { useLiveQueue, type LiveTrack } from "@/features/live/lib/use-live-queue";
 import { GuestBuyModal } from "./guest-buy-modal";
 import { GuestRequestSongModal, SongPick } from "./guest-request-song-modal";
@@ -34,6 +36,9 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
 
   const { tracks, myRequests, requestSong, placeBid, placeDownBid } =
     useLiveQueue(event.id);
+
+  // Closes the page out the moment the DJ ends the event.
+  const eventEnded = useEventClosed(event.id);
 
   useEffect(() => {
     let ignore = false;
@@ -256,6 +261,10 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
       </div>
     );
   };
+
+  if (eventEnded) {
+    return <EventEndedOverlay redirectTo="/dashboard" />;
+  }
 
   return (
     <div className="min-h-full">
