@@ -10,11 +10,12 @@ import { getCurrentUser } from "@/lib/supabase/server";
  *
  * The breakdown is driven by the EVENT's date (when the gig happened), not by
  * when the money moved: "Week" lists the events of the last 7 days, "Month"
- * the last 30, etc. Each event carries the NET amount the DJ received from it
+ * the last 30, etc. Each event carries the NET amount owed to the DJ from it
  * -- event_settlements.dj_cents (their 20% of revenue minus their portion of
- * Stripe's processing fee; the figure that lands in their connected account).
- * A leg only counts toward the total when `dj_status = 'sent'`; held/pending/
- * failed legs are shown in the breakdown but never added to it.
+ * Stripe's processing fee; the figure that lands in their connected account)
+ * -- whatever its status, so a pending leg still shows the amount that is
+ * coming. A leg only counts toward the "Received" total when `dj_status =
+ * 'sent'`.
  *
  * Songs and guests are the same window: 'played' live-queue tracks
  * (event_tracks) and attendee rows belonging to those events.
@@ -159,7 +160,11 @@ export async function GET(req: NextRequest) {
         day: "numeric",
         year: "numeric",
       }),
-      earned: djStatus === "sent" && settlement ? settlement.dj_cents / 100 : 0,
+      // The DJ's share for this event, whether or not it has moved yet: a
+      // pending/held/failed leg still shows what it is owed, and the status
+      // label says where that money stands. Only `sent` legs feed the hero
+      // total above, so the amount here can exceed the "Received" figure.
+      earned: settlement ? settlement.dj_cents / 100 : 0,
       status: STATUS_LABEL[djStatus] ?? djStatus,
       reason: settlement?.dj_failure_reason ?? null,
       songs: songCount,

@@ -62,7 +62,7 @@ const LEG_COPY: Record<
   // finished onboarding, or our own balance had not settled yet. Both are
   // retried automatically and neither loses money.
   held: { label: "Held — sending automatically", tone: "text-amber-400" },
-  pending: { label: "Queued — sends after funds settle", tone: "text-amber-400" },
+  pending: { label: "Queued — arrives in 7–8 days", tone: "text-amber-400" },
   failed: { label: "Failed", tone: "text-red-400" },
 };
 
@@ -865,8 +865,10 @@ export default function QueueManager({
             <div className="mb-1 font-display text-2xl tracking-[2px]">Night Closed</div>
             <p className="mb-4 text-xs text-muted">
               ${(settlement.netRevenueCents / 100).toFixed(2)} to split after
-              ${(settlement.totalFeesCents / 100).toFixed(2)} in fees. The event is
-              ended; payouts send automatically once the funds settle.
+              ${(settlement.totalFeesCents / 100).toFixed(2)} in fees. Your event
+              is closed — card payments take about 7–8 days to clear, then each
+              share is sent automatically to its payout account and pays out on
+              that account&apos;s schedule.
             </p>
 
             <div className="mb-4 rounded-lg border border-edge bg-surface-2 p-3 text-sm">
@@ -948,10 +950,9 @@ export default function QueueManager({
 
             {settlement.status !== "settled" && (
               <p className="mb-4 rounded-lg border border-amber-400/30 bg-amber-400/10 p-3 text-[11px] leading-[1.6] text-amber-300">
-                Not every share went out yet. The night is still closed and
-                nothing is lost — pending and held shares send automatically
-                once the funds settle or the receiving account is ready, and a
-                failed transfer shows its reason above for someone to fix.
+                Your event is closed. Card payments take about 7–8 days to
+                clear, then your share is sent automatically to your payout
+                account and pays out on that account&apos;s schedule.
               </p>
             )}
 
