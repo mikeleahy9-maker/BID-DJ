@@ -29,11 +29,13 @@ export function GuestGiftTipModal({
   kind,
   eventId,
   onClose,
+  available = 0,
 }: {
   open: boolean;
   kind: Kind | null;
   eventId: string;
   onClose: () => void;
+  available?: number;
 }) {
   const { show, toastNode } = useToast();
   const isTip = kind === "tip";
@@ -77,12 +79,39 @@ export function GuestGiftTipModal({
       setError(`Minimum ${isTip ? "tip" : "donation"} is $1`);
       return;
     }
+    if (!isTip && amount > available) {
+      setError(`You only have ${available} credit${available === 1 ? "" : "s"} available`);
+      return;
+    }
 
     if (!isTip) {
-      // Gifting credits is still a demo action.
-      onClose();
-      reset();
-      show(`🎁 $${amount.toFixed(2)} gifted to the event!`);
+      // Gift credits: real API call, deducts from attendee balance
+      setError(null);
+      setSubmitting(true);
+      try {
+        const amountCents = Math.round(amount * 100);
+        const res = await fetch("/api/guest/gift-credits", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ eventId, amountCents, message, requestId }),
+        });
+        const body = (await res.json().catch(() => null)) as
+          | { ok?: boolean; newBalance?: number; error?: string }
+          | null;
+
+        if (!res.ok) {
+          setError(body?.error ?? "Could not gift credits.");
+          return;
+        }
+
+        onClose();
+        show(`🎁 $${amount.toFixed(2)} in credits gifted to the event!`);
+        reset();
+      } catch {
+        setError("Network error — please try again.");
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
 
@@ -192,16 +221,19 @@ export function GuestGiftTipModal({
         <div className="mb-3 flex gap-2">
           {presets.map((p) => {
             const isSelected = !custom && amount === p;
+            const overLimit = !isTip && p > available;
             return (
               <button
                 key={p}
                 onClick={() => pick(p)}
-                disabled={submitting}
+                disabled={submitting || overLimit}
                 className={`flex-1 cursor-pointer rounded-lg border px-1.5 py-2.5 text-[15px] font-bold transition-all disabled:opacity-60 ${
                   isSelected
                     ? isTip
                       ? "border-neon-2 bg-neon-2/10 text-neon-2"
                       : "border-accent bg-accent/10 text-accent"
+                    : overLimit
+                    ? "border-edge bg-surface-2 text-muted/50"
                     : "border-edge bg-surface-2 text-foreground"
                 }`}
               >
@@ -217,6 +249,7 @@ export function GuestGiftTipModal({
           <input
             type="number"
             min={1}
+            max={isTip ? undefined : available}
             value={custom || (amount ? amount : "")}
             onChange={(e) => customChange(e.target.value)}
             disabled={submitting}
@@ -225,9 +258,15 @@ export function GuestGiftTipModal({
           />
         </div>
 
+        {!isTip && available >= 0 && (
+          <div className="mb-4 text-center text-[11px] text-muted">
+            Max: {available} credit{available === 1 ? "" : "s"} available
+          </div>
+        )}
+
         {!isTip ? (
           <div className="mb-4 text-center text-[11px] text-muted">
-            100% goes to the event — this is not converted to credits
+            Your credits will be deducted and recorded as a gift to this event
           </div>
         ) : (
           <div className="mb-4">
@@ -253,7 +292,7 @@ export function GuestGiftTipModal({
 
         <button
           onClick={submit}
-          disabled={submitting}
+          disabled={submitting || (!isTip && amount > available)}
           className={`w-full cursor-pointer rounded-[10px] border-none px-4 py-3.5 text-[15px] font-bold tracking-[1px] text-white disabled:opacity-60 ${
             isTip
               ? "bg-[linear-gradient(135deg,#ff2d78,#cc1155)]"
@@ -269,7 +308,7 @@ export function GuestGiftTipModal({
         <div className="mt-2.5 text-center text-[10px] text-muted">
           {isTip
             ? "Charged to your saved card. The DJ receives the full tip minus card processing fees."
-            : "Demo mode — no real charges"}
+            : "Your credit balance will be reduced by this amount"}
         </div>
       </Modal>
       {toastNode}

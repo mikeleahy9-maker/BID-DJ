@@ -430,6 +430,7 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
         kind={giftTipKind}
         eventId={event.id}
         onClose={() => setGiftTipKind(null)}
+        available={available}
       />
 
       {/* Your Requests */}
