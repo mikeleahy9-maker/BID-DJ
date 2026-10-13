@@ -37,10 +37,13 @@ async function getRecentGigs(
   // 'played'), not guest requests -- requests stop at 'approved' and are never
   // marked played, so counting them always returned 0.
   //
-  // Earned is the NET amount the DJ actually received for the event
-  // (event_settlements.dj_cents), the same figure the earnings page shows;
-  // only legs that actually moved (dj_status = 'sent') count. The old tip-based
-  // sum used tips.status = 'released', which nothing ever sets, so it was 0 too.
+  // Earned is the NET amount the DJ is owed for the event
+  // (event_settlements.dj_cents), the same figure the earnings page shows.
+  // We no longer wait for dj_status = 'sent' to show it -- a gig that has ended
+  // but not yet cleared used to read $0.00, which looked like a bug; now the
+  // amount shows immediately and `status` says whether it has landed. The old
+  // tip-based sum used tips.status = 'released', which nothing ever sets, so it
+  // was 0 too.
   const [songsResult, settlementsResult] = await Promise.all([
     supabase
       .from("event_tracks")
@@ -59,19 +62,37 @@ async function getRecentGigs(
     songsByEvent.set(id, (songsByEvent.get(id) ?? 0) + 1);
   }
 
-  const earnedCentsByEvent = new Map<string, number>();
+  const STATUS_LABEL: Record<string, string> = {
+    sent: "Settled",
+    held: "Processing",
+    pending: "Pending",
+    failed: "Failed",
+  };
+
+  const earningsByEvent = new Map<string, { cents: number; status: string }>();
   for (const row of settlementsResult.data ?? []) {
-    if (row.dj_status !== "sent") continue;
     const id = row.event_id as string;
-    earnedCentsByEvent.set(id, Number(row.dj_cents ?? 0));
+    const djStatus = row.dj_status as string | null;
+    earningsByEvent.set(id, {
+      cents: Number(row.dj_cents ?? 0),
+      status: (djStatus && STATUS_LABEL[djStatus]) || "Pending",
+    });
   }
 
-  return pastRows.map((row) => ({
-    name: row.name as string,
-    date: pastDateLabel(row.event_date as string | null),
-    earned: (earnedCentsByEvent.get(row.id as string) ?? 0) / 100,
-    songs: songsByEvent.get(row.id as string) ?? 0,
-  }));
+  return pastRows.map((row) => {
+    const info = earningsByEvent.get(row.id as string);
+    return {
+      name: row.name as string,
+      date: pastDateLabel(row.event_date as string | null),
+      // Show what the DJ will get for the gig the moment it ends, not only once
+      // the split has moved. The bank credit still only lands when the leg is
+      // 'sent', but the DJ should always see the amount they're owed; `status`
+      // tells them where that money stands.
+      earned: (info?.cents ?? 0) / 100,
+      songs: songsByEvent.get(row.id as string) ?? 0,
+      status: info?.status,
+    };
+  });
 }
 
 export default async function DJEventsPage() {

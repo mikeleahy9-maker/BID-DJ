@@ -404,7 +404,20 @@ export default function EventsManager({
                   <div className="text-sm font-semibold">{ev.name}</div>
                   <div className="text-[11px] text-muted">{ev.date} · {ev.songs} songs</div>
                 </div>
-                <div className="font-display text-lg text-neon">${ev.earned.toFixed(2)}</div>
+                <div className="text-right">
+                  <div className="font-display text-lg text-neon">
+                    ${ev.earned.toFixed(2)}
+                  </div>
+                  {ev.status && ev.status !== "Settled" && (
+                    <div
+                      className={`text-[10px] uppercase tracking-[1px] ${
+                        ev.status === "Failed" ? "text-red-400" : "text-amber-400"
+                      }`}
+                    >
+                      {ev.status}
+                    </div>
+                  )}
+                </div>
               </div>
             ))}
             {recentEvents.length > RECENT_PAGE_SIZE && (

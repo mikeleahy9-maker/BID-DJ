@@ -47,6 +47,8 @@ export interface PastEvent {
   date: string;
   earned: number;
   songs: number;
+  /** Where the DJ's share stands: "Settled" once it has moved, otherwise "Processing"/"Pending"/"Failed". */
+  status?: string;
 }
 
 export interface SavedPlaylist {
