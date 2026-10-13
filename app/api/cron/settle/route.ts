@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { retryOutstandingSettlements } from "@/lib/settlement";
+import { retryOutstandingTips } from "@/lib/tips";
 
 /**
  * POST /api/cron/settle
@@ -38,8 +39,13 @@ export async function POST(req: NextRequest) {
   }
 
   const released = await retryOutstandingSettlements();
-  console.info(`[cron settle] sweep complete: ${released} share(s) released`);
-  return NextResponse.json({ ok: true, released });
+  // Tips share the same triggers and the same "wait for funds / onboarding"
+  // reason to be held, so the one sweep clears both ledgers.
+  const tips = await retryOutstandingTips();
+  console.info(
+    `[cron settle] sweep complete: ${released} share(s), ${tips} tip(s) released`
+  );
+  return NextResponse.json({ ok: true, released, tips });
 }
 
 export async function GET() {

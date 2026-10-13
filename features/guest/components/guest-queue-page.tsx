@@ -428,6 +428,7 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
       <GuestGiftTipModal
         open={giftTipKind !== null}
         kind={giftTipKind}
+        eventId={event.id}
         onClose={() => setGiftTipKind(null)}
       />
 

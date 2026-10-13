@@ -204,14 +204,14 @@ type TransferOutcome =
  * from transfers.create arrive as an invalid_request_error with no stable
  * `code`, only this message.
  */
-function isInsufficientFunds(err: unknown): boolean {
+export function isInsufficientFunds(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
   return /insufficient available funds|insufficient funds|exceeds your available balance/i.test(
     message
   );
 }
 
-function describeError(err: unknown): string {
+export function describeError(err: unknown): string {
   if (typeof err === "object" && err !== null) {
     const e = err as { type?: string; code?: string; message?: string };
     const detail = [e.type, e.code].filter(Boolean).join("/");
@@ -781,7 +781,7 @@ type StripeClient = NonNullable<ReturnType<typeof getStripeOrNull>>;
  * The platform's USD balance that is actually movable right now, or null if
  * Stripe could not be asked.
  */
-async function availableUsdCents(stripe: StripeClient): Promise<number | null> {
+export async function availableUsdCents(stripe: StripeClient): Promise<number | null> {
   try {
     const balance = await stripe.balance.retrieve();
     return balance.available.find((a) => a.currency === CURRENCY)?.amount ?? 0;

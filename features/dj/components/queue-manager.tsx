@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Modal } from "@/components/ui/modal";
 import { QrDisplay } from "@/components/ui/qr-display";
 import { useToast } from "@/components/ui/use-toast";
 import { InfiniteScrollLoader } from "@/features/dj/components/infinite-scroll-loader";
+import { useEventTips } from "@/features/dj/lib/use-event-tips";
 import { useInfiniteSongSearch } from "@/features/dj/lib/use-infinite-song-search";
 import { PRICING, REFUND_REASONS, SeedSong } from "@/features/dj/data";
 import { LiveBoard } from "@/features/live/components/live-board";
@@ -132,6 +133,27 @@ export default function QueueManager({
   // A helper working the queue must be closed out if the DJ ends the event from
   // their own device. The owner drives the close, so only helper mode overlays.
   const eventClosed = useEventClosed(helperMode ? (eventContext?.id ?? "") : "");
+
+  // Live tip feed. Helpers are queue-only and never see money, so the feed is
+  // disabled for them. A tip arriving mid-set also toasts the DJ.
+  const tips = useEventTips(helperMode ? "" : (eventContext?.id ?? ""), (tip) => {
+    show(
+      `💸 ${tip.nickname} tipped $${(tip.amountCents / 100).toFixed(2)}` +
+        (tip.message ? ` — "${tip.message}"` : "")
+    );
+  });
+  const tipTotals = useMemo(
+    () =>
+      tips.reduce(
+        (acc, t) => {
+          acc.grossCents += t.amountCents;
+          acc.netCents += t.netCents;
+          return acc;
+        },
+        { grossCents: 0, netCents: 0 }
+      ),
+    [tips]
+  );
 
   /**
    * Money for the event comes from credit PURCHASES, not from board activity.
@@ -479,10 +501,9 @@ export default function QueueManager({
             {(finance?.purchaser_count ?? 0) !== 1 && "s"} bought credits ·{" "}
             {songsPlayed} song{songsPlayed !== 1 && "s"} played
           </div>
-          {!helperMode && collected > 0 && (
-            <div className="mt-2 text-[11px] text-muted">
-              Splits at close: organizer ${organizerCut.toFixed(2)} · DJ $
-              {djCut.toFixed(2)} · BidaBeat ${bidabeatCut.toFixed(2)}
+          {!helperMode && tips.length > 0 && (
+            <div className="mt-2 text-[11px] font-semibold text-neon-2">
+              💸 Tips ${(tipTotals.netCents / 100).toFixed(2)} — 100% yours
             </div>
           )}
         </div>
@@ -688,6 +709,85 @@ export default function QueueManager({
           ))}
         </div>
       </section>
+
+      {/* Tips — live feed of guest tips, shown only to the owner */}
+      {!helperMode && (
+        <section>
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="flex min-w-0 items-center gap-2 text-[11px] uppercase tracking-[2px] text-muted">
+              <span className="truncate">💸 Tips</span>
+            </h2>
+            {tips.length > 0 && (
+              <span className="shrink-0 rounded-full border border-neon-2/40 bg-neon-2/10 px-3 py-1 text-[11px] font-bold text-neon-2">
+                {tips.length} tip{tips.length !== 1 && "s"} · ${(tipTotals.netCents / 100).toFixed(2)}
+              </span>
+            )}
+          </div>
+          {tips.length === 0 ? (
+            <div className="rounded-xl border border-edge bg-surface p-6 text-center text-sm text-muted">
+              No tips yet — guests can tip you from their queue. They land here
+              live, with the guest&apos;s name and message.
+            </div>
+          ) : (
+            <div className="flex max-h-72 flex-col gap-2 overflow-y-auto pr-1">
+              {tips.map((tip) => {
+                const reason =
+                  tip.status === "failed"
+                    ? "Failed — needs attention"
+                    : tip.status === "held"
+                      ? "Held — sending automatically"
+                      : null;
+                return (
+                  <div
+                    key={tip.id}
+                    className="flex shrink-0 items-start gap-3 rounded-xl border border-edge bg-surface p-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate text-sm font-bold text-foreground">
+                          {tip.nickname}
+                        </span>
+                        {reason && (
+                          <span
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              tip.status === "failed"
+                                ? "bg-red-500/15 text-red-400"
+                                : "bg-amber-400/15 text-amber-400"
+                            }`}
+                          >
+                            {reason}
+                          </span>
+                        )}
+                      </div>
+                      {tip.message && (
+                        <div className="mt-0.5 truncate text-xs italic text-muted">
+                          “{tip.message}”
+                        </div>
+                      )}
+                      <div className="mt-0.5 text-[10px] text-muted">
+                        {new Date(tip.createdAt).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="font-display text-xl tracking-[1px] text-neon-2">
+                        ${(tip.amountCents / 100).toFixed(2)}
+                      </div>
+                      {tip.netCents !== tip.amountCents && (
+                        <div className="text-[10px] text-muted">
+                          ${(tip.netCents / 100).toFixed(2)} to you
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ---- Refund modal ---- */}
       <Modal open={showRefund} onClose={() => setShowRefund(false)}>

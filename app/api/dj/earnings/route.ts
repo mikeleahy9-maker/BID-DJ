@@ -19,6 +19,10 @@ import { getCurrentUser } from "@/lib/supabase/server";
  *
  * Songs and guests are the same window: 'played' live-queue tracks
  * (event_tracks) and attendee rows belonging to those events.
+ *
+ * Tips are reported alongside but never inside the credit split: each tip is a
+ * separate transfer to the DJ (amount minus Stripe's fee), so `tipsTotal` (the
+ * net that has moved) and per-event `tips` (net owed) are their own figures.
  */
 const PERIODS = new Set(["week", "month", "year", "all"]);
 
@@ -138,16 +142,41 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Tips are separate from the credit split: the DJ receives the whole tip
+  // minus Stripe's processing fee, per tip. Per event we track the net owed
+  // (`earned`) and how much has actually moved (`sent`); `failed` tips were
+  // never delivered, so they are not earnings.
+  const tipsByEvent = new Map<string, { earned: number; sent: number }>();
+  if (eventIds.length > 0) {
+    const { data: tipRows } = await supabase
+      .from("tips")
+      .select("event_id, amount_cents, fee_cents, status")
+      .in("event_id", eventIds);
+    for (const tip of tipRows ?? []) {
+      if (tip.status === "failed") continue;
+      const net = Math.max(0, Number(tip.amount_cents) - Number(tip.fee_cents));
+      const current = tipsByEvent.get(tip.event_id) ?? { earned: 0, sent: 0 };
+      current.earned += net;
+      if (tip.status === "sent") current.sent += net;
+      tipsByEvent.set(tip.event_id, current);
+    }
+  }
+
   let total = 0;
   let songs = 0;
   let guests = 0;
+  let tipsReceived = 0;
+  let tipsPending = 0;
   const breakdown = inWindow.map((event) => {
     const settlement = settlementByEvent.get(event.id);
     const djStatus = settlement?.dj_status ?? "pending";
     const songCount = songsByEvent.get(event.id) ?? 0;
     const guestCount = guestsByEvent.get(event.id) ?? 0;
+    const tipInfo = tipsByEvent.get(event.id) ?? { earned: 0, sent: 0 };
     songs += songCount;
     guests += guestCount;
+    tipsReceived += tipInfo.sent;
+    tipsPending += tipInfo.earned - tipInfo.sent;
     if (djStatus === "sent") {
       // dj_cents is NET of the DJ's Stripe fees; no rounding because each leg
       // was already floored on the integer amount Stripe moved.
@@ -165,6 +194,9 @@ export async function GET(req: NextRequest) {
       // label says where that money stands. Only `sent` legs feed the hero
       // total above, so the amount here can exceed the "Received" figure.
       earned: settlement ? settlement.dj_cents / 100 : 0,
+      // Tips on this event, net of Stripe's fee (what the DJ gets). Not part
+      // of `earned`: there is no split on a tip.
+      tips: tipInfo.earned / 100,
       status: STATUS_LABEL[djStatus] ?? djStatus,
       reason: settlement?.dj_failure_reason ?? null,
       songs: songCount,
@@ -176,6 +208,8 @@ export async function GET(req: NextRequest) {
     period,
     // cents -> dollars: the panel renders money, not cents
     total: total / 100,
+    tipsTotal: tipsReceived / 100,
+    tipsPending: tipsPending / 100,
     gigs: breakdown.length,
     songs,
     guests,

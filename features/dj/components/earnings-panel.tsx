@@ -21,6 +21,8 @@ const PERIOD_LABEL: Record<string, string> = {
 interface EarningsData {
   period: string;
   total: number;
+  tipsTotal: number;
+  tipsPending: number;
   gigs: number;
   songs: number;
   guests: number;
@@ -31,6 +33,7 @@ interface EarningsData {
     name: string;
     date: string;
     earned: number;
+    tips: number;
     status: string;
     reason?: string | null;
     songs: number;
@@ -121,6 +124,24 @@ export default function EarningsPanel() {
         <div className="text-xs text-muted">
           {PERIOD_LABEL[period]} · DJ share (20%)
         </div>
+        {((data?.tipsTotal ?? 0) > 0 || (data?.tipsPending ?? 0) > 0) && (
+          <div className="mt-3 border-t border-neon/15 pt-3 text-sm font-semibold text-neon-2">
+            💸 $
+            {(data?.tipsTotal ?? 0).toLocaleString("en-US", {
+              minimumFractionDigits: 2,
+            })}{" "}
+            in tips
+            {(data?.tipsPending ?? 0) > 0 && (
+              <span className="ml-1 text-xs font-normal text-muted">
+                (+$
+                {(data?.tipsPending ?? 0).toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                })}{" "}
+                processing)
+              </span>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Stats row */}
@@ -159,7 +180,16 @@ export default function EarningsPanel() {
                     <div className="text-[11px] text-muted/80">{ev.reason}</div>
                   ) : null}
                 </div>
-                <div className="font-display text-2xl text-neon">${ev.earned.toFixed(2)}</div>
+                <div className="text-right">
+                  <div className="font-display text-2xl text-neon">
+                    ${ev.earned.toFixed(2)}
+                  </div>
+                  {ev.tips > 0 && (
+                    <div className="text-[11px] font-semibold text-neon-2">
+                      +${ev.tips.toFixed(2)} tips
+                    </div>
+                  )}
+                </div>
               </div>
             ))
           ) : (

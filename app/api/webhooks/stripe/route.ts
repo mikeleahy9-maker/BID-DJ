@@ -7,6 +7,12 @@ import {
 } from "@/lib/stripe-connect";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { readChargeFee, retryOutstandingSettlements } from "@/lib/settlement";
+import {
+  recordTip,
+  resolveTipNickname,
+  retryOutstandingTips,
+  settleTip,
+} from "@/lib/tips";
 
 /**
  * POST /api/webhooks/stripe
@@ -32,7 +38,10 @@ import { readChargeFee, retryOutstandingSettlements } from "@/lib/settlement";
  *   - payment_intent.succeeded (type = credit_purchase)
  *       → records an off-session credit purchase against the guest's saved
  *         card. This is the normal path, since guests save a card at signup.
- *   - payment_intent.payment_failed / .canceled (type = credit_purchase)
+ *   - payment_intent.succeeded (type = guest_tip)
+ *       → records an off-session DJ tip and pays it out (net of the Stripe
+ *         fee); a tip that cannot be paid yet is held for the tip sweep.
+ *   - payment_intent.payment_failed / .canceled (type = credit_purchase | guest_tip)
  *       → acknowledged; nothing is granted on failure.
  *   - setup_intent.succeeded (metadata.user_id)
  *       → saves the guest's Stripe customer + payment method refs on profiles.
@@ -172,6 +181,9 @@ export async function POST(req: NextRequest) {
           // shares oldest-event-first, exactly like the cron and
           // balance.available sweeps, so a fresh account never jumps the queue.
           await retryOutstandingSettlements();
+          // Tips are paid per-performer and use the same triggers, so a DJ who
+          // just finished onboarding is also cleared here.
+          await retryOutstandingTips();
         } catch (err) {
           console.error(`[webhook stripe] ${notification.type} handling failed:`, err);
           return NextResponse.json({ error: "Webhook handler error." }, { status: 500 });
@@ -225,10 +237,14 @@ export async function POST(req: NextRequest) {
         // session event is recorded exactly once.
         const intent = event.data.object as {
           id: string;
+          amount?: number;
           metadata?: Record<string, string | undefined>;
         };
         if (intent.metadata?.type === "credit_purchase") {
           await fulfillCreditPurchase(intent.id, intent);
+        }
+        if (intent.metadata?.type === "guest_tip") {
+          await fulfillTip(intent);
         }
         break;
       }
@@ -242,6 +258,11 @@ export async function POST(req: NextRequest) {
         if (intent.metadata?.type === "credit_purchase") {
           console.info(
             `[webhook stripe] credit purchase ${intent.id} did not complete: ${event.type}`
+          );
+        }
+        if (intent.metadata?.type === "guest_tip") {
+          console.info(
+            `[webhook stripe] tip ${intent.id} did not complete: ${event.type}`
           );
         }
         break;
@@ -337,6 +358,7 @@ export async function POST(req: NextRequest) {
         // v2 path, the now-payable account pays through the single ordering
         // engine, so releases stay oldest-event-first (FIFO) globally.
         await retryOutstandingSettlements();
+        await retryOutstandingTips();
         break;
       }
       case "balance.available": {
@@ -344,6 +366,8 @@ export async function POST(req: NextRequest) {
         // (waiting on funds to settle into `available`) may be payable now.
         // Returns 0 without touching Stripe when it is not.
         await retryOutstandingSettlements();
+        // A tip whose charge just settled becomes payable here too.
+        await retryOutstandingTips();
         break;
       }
       default:
@@ -584,4 +608,52 @@ async function recordPurchaseFee(purchaseId: string, paymentIntentId: string) {
       err
     );
   }
+}
+
+/**
+ * Books a paid tip and pays it out to the DJ.
+ *
+ * Keyed on the PaymentIntent id via record_tip(), so a webhook replay after the
+ * inline charge path already booked it inserts nothing. The amount is Stripe's
+ * `amount` (what was actually charged), never a metadata figure. Payout is
+ * attempted here, and any tip that cannot be paid yet is left `held` for the
+ * shared sweep (retryOutstandingTips) rather than failing the webhook.
+ *
+ * Metadata is written by our own server at charge time; the eventId/userId are
+ * still validated because a malformed intent must not book a tip against a
+ * wrong event.
+ */
+async function fulfillTip(source: {
+  id: string;
+  amount?: number;
+  metadata?: Record<string, string | undefined>;
+}): Promise<void> {
+  const metadata = source.metadata ?? {};
+  const userId = metadata.userId;
+  const eventId = metadata.eventId;
+  const amountCents = source.amount ?? Number(metadata.amountCents);
+
+  if (!userId || !eventId || !Number.isFinite(amountCents) || amountCents <= 0) {
+    console.error(
+      `[webhook stripe] guest_tip ${source.id} missing userId/eventId/amount; ignoring.`
+    );
+    return;
+  }
+
+  const nickname = resolveTipNickname(metadata.nickname, undefined, null);
+
+  const tip = await recordTip({
+    eventId,
+    userId,
+    nickname,
+    amountCents,
+    message: String(metadata.message ?? "").slice(0, 140),
+    paymentIntentId: source.id,
+  });
+
+  const outcome = await settleTip(tip.id);
+  console.info(
+    `[webhook stripe] tip ${source.id} recorded (${amountCents}c) for ${userId} ` +
+      `on event ${eventId}; payout ${outcome.status}`
+  );
 }
