@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getCurrentUser } from "@/lib/supabase/server";
+import { organizerInviteEmail, sendEmail } from "@/lib/email";
+import { organizerInviteUrl } from "@/lib/organizer-invite-token";
 import {
   createOrganizationConnectAccount,
-  createOrganizationOnboardingLink,
   fetchDjConnectAccountStatus,
 } from "@/lib/stripe-connect";
 
@@ -24,13 +25,17 @@ interface OrganizerSummary {
 }
 
 /**
- * Invites (or re-invites) the organizer for an event and returns the Stripe
- * onboarding URL for them.
+ * Invites (or re-invites) the organizer for an event: creates (or reuses) the
+ * organization and its Stripe Connect account, then EMAILS a stable invite link.
  *
- * TEMPORARY: SendGrid is not configured yet, so the onboarding URL is returned
- * to the caller for manual delivery instead of being emailed. When the SendGrid
- * key lands, replace the `return NextResponse.json({ onboardingUrl })` tail with
- * an email send and stop returning the URL.
+ * The emailed link points at our own /organizer/invite route, never at Stripe: a
+ * Stripe account link is single-use and expires within minutes, so it cannot sit
+ * in an inbox. That route re-mints a fresh Stripe link on every visit, which is
+ * what makes the email reopenable.
+ *
+ * The URL is only returned to the caller as a fallback when the email could not
+ * be sent (SendGrid unset or rejected), so the DJ can still pass the link on by
+ * hand rather than the invite failing silently.
  *
  * The organization is keyed on contact_email (case-insensitive) so re-inviting
  * the same venue reuses its existing Connect account rather than creating a
@@ -77,7 +82,7 @@ export async function POST(
 
   const { data: event, error: eventError } = await admin
     .from("events")
-    .select("id, name, dj_id")
+    .select("id, name, dj_id, status")
     .eq("id", eventId)
     .maybeSingle();
 
@@ -92,6 +97,19 @@ export async function POST(
     return NextResponse.json(
       { error: "Only the event owner can invite the organizer." },
       { status: 403 }
+    );
+  }
+
+  // The organizer receives the event's non-DJ share, so who it is has to be
+  // settled before the night starts. Once the event is live (or ended) the
+  // organizer is locked rather than silently re-pointed.
+  if (event.status !== "draft") {
+    return NextResponse.json(
+      {
+        error:
+          "The organizer can only be changed while the event is still a draft.",
+      },
+      { status: 409 }
     );
   }
 
@@ -178,18 +196,20 @@ export async function POST(
     }
   }
 
-  // This event may already be settled: a DJ can close a night without having
-  // invited the organizer and link one afterwards. Point any existing
-  // settlement at the (now known) organization and Stripe account so the payout
-  // sweeps to the right place and the record shows who it belongs to. Failing
-  // here is not fatal -- the sweep re-resolves the live link on its own.
+  // Defensive: point any existing settlement at the (now known) organization and
+  // Stripe account so the payout sweep and the record show who it belongs to.
+  // Only legs that have not been paid are touched -- once the organizer share was
+  // actually transferred ('sent'), re-pointing the row would mislabel money that
+  // already left to the previous organizer. Invites are draft-only, so in the
+  // normal flow there is no settlement here; this covers legacy events.
   const { error: settleRefreshError } = await admin
     .from("event_settlements")
     .update({
       organization_id: organizationId,
       organization_stripe_account_id: stripeAccountId,
     })
-    .eq("event_id", eventId);
+    .eq("event_id", eventId)
+    .in("organizer_status", ["pending", "held"]);
   if (settleRefreshError) {
     console.warn(
       "[invite-organizer] could not refresh the settlement:",
@@ -197,27 +217,56 @@ export async function POST(
     );
   }
 
-  let onboardingUrl: string;
-  try {
-    onboardingUrl = await createOrganizationOnboardingLink({
-      accountId: stripeAccountId,
-      eventId,
+  // The email carries OUR stable, reopenable invite URL -- never the raw Stripe
+  // link, which is single-use and expires within minutes. Each visit to it mints
+  // a fresh Stripe link, so the organizer can reopen the email as often as they
+  // need (and Stripe bounces an abandoned session back to the same URL).
+  const onboardingUrl = organizerInviteUrl({ organizationId, eventId });
+
+  // Deliver the invite by email. A failed send is not fatal -- the invite is
+  // live either way, so fall back to returning the link for the DJ to pass on.
+  const djName = await loadDjName(admin, event.dj_id);
+  const delivery = await sendEmail({
+    to: email,
+    ...organizerInviteEmail({
+      organizerName: name,
+      djName,
       eventName: event.name,
-      organizationName: name,
-    });
-  } catch (err) {
-    console.error("[invite-organizer] onboarding link failed:", err);
-    return NextResponse.json(
-      { error: "Could not create the organizon's onboarding link." },
-      { status: 502 }
-    );
+      onboardingUrl,
+    }),
+  });
+  if (!delivery.ok) {
+    console.error("[invite-organizer] could not email the invite:", delivery.error);
   }
 
   return NextResponse.json({
     ok: true,
     organizationId,
-    onboardingUrl,
+    emailed: delivery.ok,
+    // Only handed back when the email did not go out, so the DJ is never shown
+    // a link that was already delivered for them.
+    onboardingUrl: delivery.ok ? undefined : onboardingUrl,
+    emailError: delivery.ok ? undefined : delivery.error,
   });
+}
+
+/**
+ * The DJ's display name for the email greeting: their act name if set, else the
+ * first/last name on their profile.
+ */
+async function loadDjName(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  djId: string
+): Promise<string> {
+  const { data } = await admin
+    .from("profiles")
+    .select("act_name, first_name, last_name")
+    .eq("id", djId)
+    .maybeSingle();
+  const name =
+    data?.act_name ||
+    [data?.first_name, data?.last_name].filter(Boolean).join(" ");
+  return name || "The DJ";
 }
 
 /** Current organizer for an event, so the setup page can show invite state. */

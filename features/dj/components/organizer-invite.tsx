@@ -15,6 +15,8 @@ interface OrganizerState {
 
 interface OrganizerInviteProps {
   eventId: string;
+  /** The event has left draft: the organizer is locked and cannot be changed. */
+  locked?: boolean;
   /** Called after a successful invite so a parent can re-check readiness. */
   onChange?: () => void;
 }
@@ -25,7 +27,11 @@ const STATUS_COPY: Record<string, string> = {
   suspended: "Suspended by Stripe",
 };
 
-export default function OrganizerInvite({ eventId, onChange }: OrganizerInviteProps) {
+export default function OrganizerInvite({
+  eventId,
+  locked = false,
+  onChange,
+}: OrganizerInviteProps) {
   const { show, toastNode } = useToast();
   const [organizer, setOrganizer] = useState<OrganizerState | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -33,6 +39,7 @@ export default function OrganizerInvite({ eventId, onChange }: OrganizerInvitePr
   const [email, setEmail] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [emailedTo, setEmailedTo] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +66,7 @@ export default function OrganizerInvite({ eventId, onChange }: OrganizerInvitePr
     e.preventDefault();
     setSubmitting(true);
     setInviteUrl(null);
+    setEmailedTo(null);
     try {
       const res = await fetch(`/api/dj/events/${eventId}/organizers`, {
         method: "POST",
@@ -69,8 +77,14 @@ export default function OrganizerInvite({ eventId, onChange }: OrganizerInvitePr
       if (!res.ok) {
         throw new Error(json.error ?? "Could not invite the organizer.");
       }
-      setInviteUrl(json.onboardingUrl);
-      show("Organizer invited.");
+      if (json.onboardingUrl) {
+        // The route only returns a URL when the email did not go out.
+        setInviteUrl(json.onboardingUrl);
+        show("Organizer invited — the email could not be sent, so send the link manually.");
+      } else {
+        setEmailedTo(email);
+        show(`Invite email sent to ${email}.`);
+      }
       onChange?.();
     } catch (err) {
       show(err instanceof Error ? err.message : "Could not invite the organizer.");
@@ -121,9 +135,18 @@ export default function OrganizerInvite({ eventId, onChange }: OrganizerInvitePr
 
       <p className="mt-3 text-sm text-muted">
         The organizer receives the event&apos;s non-DJ share and completes their own
-        Stripe payout setup. They do not need a BidaBeat account.
+        Stripe payout setup. They do not need a BidaBeat account. You can&apos;t
+        change the organizer once the event goes live.
       </p>
 
+      {locked && (
+        <p className="mt-4 rounded-lg border border-edge bg-surface-2 p-3 text-[11px] text-muted">
+          This event is no longer a draft, so the organizer is locked. Contact
+          support if it needs to change.
+        </p>
+      )}
+
+      {!locked && (
       <form onSubmit={invite} className="mt-4 grid gap-3 sm:grid-cols-2">
         <div>
           <label className="mb-1 block text-[11px] uppercase tracking-[1px] text-muted">
@@ -162,6 +185,18 @@ export default function OrganizerInvite({ eventId, onChange }: OrganizerInvitePr
           </button>
         </div>
       </form>
+      )}
+
+      {emailedTo && (
+        <div className="mt-4 rounded-lg border border-neon/30 bg-surface-2 p-4">
+          <div className="text-[11px] uppercase tracking-[1px] text-neon">
+            Invite email sent
+          </div>
+          <p className="mt-1 text-[11px] text-muted">
+            We emailed the payout setup link to {emailedTo}.
+          </p>
+        </div>
+      )}
 
       {inviteUrl && (
         <div className="mt-4 rounded-lg border border-neon/30 bg-surface-2 p-4">
@@ -169,8 +204,8 @@ export default function OrganizerInvite({ eventId, onChange }: OrganizerInvitePr
             Onboarding link - send this to the organizer
           </div>
           <p className="mt-1 text-[11px] text-muted">
-            Email delivery is not wired up yet, so copy this link and send it
-            manually for now.
+            The invite email could not be sent, so copy this link and send it
+            manually.
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <input

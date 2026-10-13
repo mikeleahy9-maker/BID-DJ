@@ -549,7 +549,11 @@ export default function EventSetupPanel({
         )}
       </div>
 
-      <OrganizerInvite eventId={dbRow.id} onChange={refreshOrganizer} />
+      <OrganizerInvite
+        eventId={dbRow.id}
+        locked={row.status !== "draft"}
+        onChange={refreshOrganizer}
+      />
 
       {/* ---- Edit event modal ---- */}
       <Modal open={showEdit} onClose={() => setShowEdit(false)}>

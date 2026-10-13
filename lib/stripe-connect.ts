@@ -261,12 +261,17 @@ export async function createOrganizationConnectAccount(params: {
  * `eventName` / `organizationName` ride along on the return_url so the landing
  * page can greet the organizer without a public lookup endpoint. They are only
  * ever interpolated into a query string.
+ *
+ * `refreshUrl` defaults to the DJ's setup page for backward compatibility, but
+ * invite flows pass their own stable URL: a stale Stripe link redirects there and
+ * a fresh one is minted, which is the only way the emailed invite keeps working.
  */
 export async function createOrganizationOnboardingLink(params: {
   accountId: string;
   eventId: string;
   eventName: string;
   organizationName: string;
+  refreshUrl?: string;
 }): Promise<string> {
   const qs = new URLSearchParams({
     event: params.eventName,
@@ -280,7 +285,7 @@ export async function createOrganizationOnboardingLink(params: {
       account_onboarding: {
         configurations: ["recipient"],
         collection_options: { fields: "eventually_due" },
-        refresh_url: `${getAppUrl()}/dj/events/${params.eventId}`,
+        refresh_url: params.refreshUrl ?? `${getAppUrl()}/dj/events/${params.eventId}`,
         return_url: `${getAppUrl()}/organizer/onboarding?${qs.toString()}`,
       },
     },
