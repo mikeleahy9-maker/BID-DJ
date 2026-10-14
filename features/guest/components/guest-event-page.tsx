@@ -34,6 +34,7 @@ export function GuestEventPage({
     id: string;
     badge: string;
     name: string;
+    djId: string;
     djName: string;
     djProfileUrl: string | null;
     djAvatarUrl: string | null;
@@ -217,6 +218,9 @@ export function GuestEventPage({
       <GuestHireModal
         open={hireOpen}
         onClose={() => setHireOpen(false)}
+        djId={event.djId}
+        eventId={event.id}
+        eventName={event.name}
         dj={{
           name: event.djName,
           profileUrl: event.djProfileUrl,

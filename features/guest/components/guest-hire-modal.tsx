@@ -17,10 +17,18 @@ const DEFAULT_BIO =
 export function GuestHireModal({
   open,
   onClose,
+  djId,
+  eventId,
+  eventName,
   dj,
 }: {
   open: boolean;
   onClose: () => void;
+  /** The DJ being booked — the request is emailed to them. */
+  djId: string;
+  /** Optional context for the email, so the DJ knows which event it came from. */
+  eventId?: string;
+  eventName?: string;
   dj: {
     name: string;
     profileUrl: string | null;
@@ -30,6 +38,7 @@ export function GuestHireModal({
   };
 }) {
   const { show, toastNode } = useToast();
+  const [sending, setSending] = useState(false);
   const [form, setForm] = useState({
     name: "",
     email: "",
@@ -39,7 +48,7 @@ export function GuestHireModal({
     message: "",
   });
 
-  const submit = () => {
+  const submit = async () => {
     if (!form.name.trim() || !form.email.trim()) {
       show("Please enter your name and email");
       return;
@@ -52,8 +61,28 @@ export function GuestHireModal({
       show("Please select an event type");
       return;
     }
-    onClose();
-    show("Booking request sent! They'll be in touch 🎛️");
+    if (sending) return;
+
+    setSending(true);
+    try {
+      const res = await fetch("/api/guest/hire-dj", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, djId, eventId, eventName }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        show(data.error || "Could not send your request. Please try again.");
+        return;
+      }
+      setForm({ name: "", email: "", phone: "", date: "", type: "", message: "" });
+      onClose();
+      show("Booking request sent! They'll be in touch 🎛️");
+    } catch {
+      show("Could not send your request. Please try again.");
+    } finally {
+      setSending(false);
+    }
   };
 
   const set = (key: keyof typeof form, value: string) =>
@@ -211,9 +240,10 @@ export function GuestHireModal({
 
         <button
           onClick={submit}
-          className="mt-4 w-full cursor-pointer rounded-[10px] border-none bg-[linear-gradient(135deg,#ff2d78,#cc1155)] px-4 py-3.5 text-[15px] font-bold tracking-[1px] text-white"
+          disabled={sending}
+          className="mt-4 w-full cursor-pointer rounded-[10px] border-none bg-[linear-gradient(135deg,#ff2d78,#cc1155)] px-4 py-3.5 text-[15px] font-bold tracking-[1px] text-white disabled:cursor-not-allowed disabled:opacity-60"
         >
-          SEND BOOKING REQUEST 🎛️
+          {sending ? "SENDING…" : "SEND BOOKING REQUEST 🎛️"}
         </button>
         <div className="mt-2.5 text-center text-[10px] text-muted">
           The DJ/Band will receive your contact info and get back to you

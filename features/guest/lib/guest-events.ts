@@ -26,6 +26,7 @@ export interface GuestEventView {
   id: string;
   code: string;
   name: string;
+  djId: string;
   djName: string;
   djProfileUrl: string | null;
   djAvatarUrl: string | null;
@@ -129,6 +130,7 @@ export async function getLiveEventForGuest(
     id: event.id,
     code: event.code,
     name: event.name,
+    djId: event.dj_id as string,
     djName: event.act || "DJ",
     djProfileUrl: djSlug ? `${getAppUrl()}/dj-profile/${djSlug}` : null,
     djAvatarUrl: dj?.avatar_url ? String(dj.avatar_url) : null,

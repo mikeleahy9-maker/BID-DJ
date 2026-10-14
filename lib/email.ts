@@ -22,6 +22,8 @@ export interface SendEmailParams {
   subject: string;
   html: string;
   text: string;
+  /** Optional Reply-To, so the recipient can answer the original sender directly. */
+  replyTo?: string;
 }
 
 export interface SendEmailResult {
@@ -54,6 +56,7 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
       body: JSON.stringify({
         personalizations: [{ to: [{ email: params.to }] }],
         from: fromAddress(),
+        ...(params.replyTo ? { reply_to: { email: params.replyTo } } : {}),
         subject: params.subject,
         content: [
           { type: "text/plain", value: params.text },
@@ -166,6 +169,134 @@ export function organizerInviteEmail(params: {
                 email at any time. If the button does not work, copy this address
                 into your browser:<br />
                 <span style="color:#00ffe1;word-break:break-all;">${onboardingUrl}</span>
+              </td>
+            </tr>
+          </table>
+          <div style="max-width:520px;padding:16px 8px 0;font-family:Arial,Helvetica,sans-serif;color:#666666;font-size:11px;text-align:center;">
+            Sent by BidaBeat &middot; ${escapeHtml(getAppHost())}
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  return { subject, html, text };
+}
+
+/** Booking dates arrive as `YYYY-MM-DD`; render them the way a human reads them. */
+function formatBookingDate(value: string): string {
+  const parsed = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/**
+ * The booking enquiry a guest sends the DJ/Band from an event page: the guest's
+ * contact details and brief, delivered to the DJ's inbox. The Reply-To is set to
+ * the guest by the caller, so hitting reply reaches them directly.
+ */
+export function djBookingRequestEmail(params: {
+  djName: string;
+  guestName: string;
+  guestEmail: string;
+  guestPhone: string;
+  eventDate: string;
+  eventType: string;
+  message: string;
+  eventName?: string | null;
+}): { subject: string; html: string; text: string } {
+  const djName = params.djName.trim() || "there";
+  const guestName = params.guestName;
+  const guestEmail = params.guestEmail;
+  const guestPhone = params.guestPhone.trim();
+  const eventDate = formatBookingDate(params.eventDate);
+  const eventType = params.eventType;
+  const message = params.message.trim();
+  const eventName = params.eventName?.trim() || null;
+
+  const subject = `New booking request from ${guestName}`;
+  const context = eventName
+    ? ` They're reaching out from ${eventName} on BidaBeat.`
+    : " They sent this through BidaBeat.";
+
+  const text = [
+    `Hi ${djName},`,
+    "",
+    `${guestName} would like to book you.${context}`,
+    "",
+    `  Name:        ${guestName}`,
+    `  Email:       ${guestEmail}`,
+    ...(guestPhone ? [`  Phone:       ${guestPhone}`] : []),
+    `  Event date:  ${eventDate}`,
+    `  Event type:  ${eventType}`,
+    ...(message
+      ? ["", "  Details:", ...message.split("\n").map((line) => `    ${line}`)]
+      : []),
+    "",
+    `Reply to this email to reach ${guestName} directly at ${guestEmail}.`,
+    "",
+    "— BidaBeat",
+  ].join("\n");
+
+  const row = (label: string, value: string) => `
+            <tr>
+              <td style="padding:6px 0;font-family:Arial,Helvetica,sans-serif;color:#888888;font-size:13px;white-space:nowrap;vertical-align:top;">${escapeHtml(
+                label
+              )}</td>
+              <td style="padding:6px 0 6px 16px;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:14px;line-height:1.5;">${value}</td>
+            </tr>`;
+
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#080808;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#080808;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#111111;border:1px solid #2a2a2a;border-radius:16px;">
+            <tr>
+              <td style="padding:28px 28px 4px;font-family:Arial,Helvetica,sans-serif;font-size:22px;letter-spacing:2px;font-weight:bold;color:#00ffe1;">
+                BIDABEAT
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:16px;line-height:1.6;">
+                Hi ${escapeHtml(djName)},
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:15px;line-height:1.6;">
+                <strong>${escapeHtml(guestName)}</strong> would like to book you.${context}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:18px 28px 0;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                  ${row("Name", escapeHtml(guestName))}
+                  ${row("Email", `<a href="mailto:${escapeHtml(guestEmail)}" style="color:#00ffe1;text-decoration:none;">${escapeHtml(guestEmail)}</a>`)}
+                  ${guestPhone ? row("Phone", escapeHtml(guestPhone)) : ""}
+                  ${row("Event date", escapeHtml(eventDate))}
+                  ${row("Event type", escapeHtml(eventType))}
+                  ${message ? row("Details", escapeHtml(message).replace(/\n/g, "<br />")) : ""}
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:26px 28px 6px;">
+                <a href="mailto:${escapeHtml(guestEmail)}" style="display:inline-block;background:#00ffe1;color:#080808;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;padding:14px 30px;border-radius:10px;">
+                  Reply to ${escapeHtml(guestName)}
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:14px 28px 28px;font-family:Arial,Helvetica,sans-serif;color:#666666;font-size:12px;line-height:1.6;">
+                Replying to this email reaches ${escapeHtml(guestName)} directly at
+                ${escapeHtml(guestEmail)}.
               </td>
             </tr>
           </table>
