@@ -180,3 +180,95 @@ export function organizerInviteEmail(params: {
 
   return { subject, html, text };
 }
+
+/**
+ * The "your night is still live" heads-up sent ~30 hours into an event, before
+ * the 36-hour auto-close. Gives the DJ a last chance to end the night (or keep
+ * it open on purpose) instead of finding it closed.
+ */
+export function eventAutoCloseWarningEmail(params: {
+  djName: string;
+  eventName: string;
+  hoursRemaining: number;
+  queueUrl: string;
+}): { subject: string; html: string; text: string } {
+  const djName = escapeHtml(params.djName);
+  const eventName = escapeHtml(params.eventName);
+  const hours = params.hoursRemaining;
+  const queueUrl = params.queueUrl;
+
+  const subject = `${params.eventName} is still live — closes in ~${hours}h`;
+
+  const text = [
+    `Hi ${params.djName},`,
+    "",
+    `${params.eventName} has been live for about 30 hours. If it is still open, ` +
+      `we will close and settle it automatically in about ${hours} hour${hours === 1 ? "" : "s"}.`,
+    "",
+    "If the night is over, end it now so guests stop bidding and everyone gets " +
+      "settled right away:",
+    "",
+    `End the event: ${queueUrl}`,
+    "",
+    "If you are still going, you can ignore this — but remember the event closes " +
+      "itself at 36 hours.",
+    "",
+    "— BidaBeat",
+  ].join("\n");
+
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#080808;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#080808;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#111111;border:1px solid #2a2a2a;border-radius:16px;">
+            <tr>
+              <td style="padding:28px 28px 4px;font-family:Arial,Helvetica,sans-serif;font-size:22px;letter-spacing:2px;font-weight:bold;color:#00ffe1;">
+                BIDABEAT
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:16px;line-height:1.6;">
+                Hi ${djName},
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:15px;line-height:1.6;">
+                <strong>${eventName}</strong> has been live for about 30 hours. If
+                it is still open, we&rsquo;ll close and settle it automatically in
+                about ${hours} hour${hours === 1 ? "" : "s"}.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#888888;font-size:14px;line-height:1.6;">
+                If the night is over, end it now so guests stop bidding and everyone
+                gets settled right away. If you&rsquo;re still going, you can ignore
+                this &mdash; but remember the event closes itself at 36 hours.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:26px 28px 6px;">
+                <a href="${queueUrl}" style="display:inline-block;background:#00ffe1;color:#080808;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;padding:14px 30px;border-radius:10px;">
+                  End the event
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:14px 28px 28px;font-family:Arial,Helvetica,sans-serif;color:#666666;font-size:12px;line-height:1.6;">
+                If the button does not work, copy this address into your browser:<br />
+                <span style="color:#00ffe1;word-break:break-all;">${queueUrl}</span>
+              </td>
+            </tr>
+          </table>
+          <div style="max-width:520px;padding:16px 8px 0;font-family:Arial,Helvetica,sans-serif;color:#666666;font-size:11px;text-align:center;">
+            Sent by BidaBeat &middot; ${escapeHtml(getAppHost())}
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  return { subject, html, text };
+}

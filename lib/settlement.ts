@@ -378,12 +378,18 @@ export async function ensureStripeFees(
 
 export async function settleEvent(
   eventId: string,
-  actorId: string
+  actorId: string,
+  opts: { system?: boolean } = {}
 ): Promise<SettlementResult> {
-  // The DJ session is what grants event_finance(): it reads auth.uid(), so the
-  // admin client would return an empty result and silently settle at $0.
-  const supabase = await getSupabaseServerClient();
   const admin = getSupabaseAdmin();
+  // The DJ session is what grants event_finance(): it reads auth.uid(), so the
+  // admin client would return an empty result and silently settle at $0. The
+  // 36h auto-close runs with no session, so in system mode it uses the
+  // service-role client and the unguarded event_finance_system() RPC (granted
+  // to service_role only) -- same maths, no owner guard.
+  const system = opts.system === true;
+  const supabase = system ? admin : await getSupabaseServerClient();
+  const financeRpc = system ? "event_finance_system" : "event_finance";
 
   const { data: event, error: eventError } = await supabase
     .from("events")
@@ -403,7 +409,7 @@ export async function settleEvent(
 
   const existing = await loadSettlement(admin, eventId);
   if (existing) {
-    return resumeExisting({ admin, supabase, event, existing });
+    return resumeExisting({ admin, supabase, event, existing, financeRpc });
   }
 
   if (event.status !== "live") {
@@ -428,7 +434,7 @@ export async function settleEvent(
   }
 
   const { data: financeRows, error: financeError } = await supabase.rpc(
-    "event_finance",
+    financeRpc,
     { p_event_id: eventId }
   );
 
@@ -516,21 +522,25 @@ export async function settleEvent(
  * (touching only pending/held legs) moves the money. Re-running can never
  * re-book, re-split, or pay: that is what makes a retried close safe.
  */
+type FinanceRpc = "event_finance" | "event_finance_system";
+
 async function resumeExisting({
   admin,
   supabase,
   event,
   existing,
+  financeRpc,
 }: {
   admin: SupabaseClient;
   supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>;
   event: EventRow;
   existing: SettlementRow;
+  financeRpc: FinanceRpc;
 }): Promise<SettlementResult> {
   // Recommendation of the amounts (and any unbooked fees) from before the
   // net-revenue migration. Transfers are NOT attempted here: /end has one job,
   // closing the night; the scheduled sweep moves the money.
-  const row = await healLegacySplit({ admin, supabase, event, existing });
+  const row = await healLegacySplit({ admin, supabase, event, existing, financeRpc });
 
   // Make sure the event itself landed on ended, since a prior run may have
   // recorded the settlement and then died before closing.
@@ -567,11 +577,13 @@ async function healLegacySplit({
   supabase,
   event,
   existing,
+  financeRpc,
 }: {
   admin: SupabaseClient;
   supabase: Awaited<ReturnType<typeof getSupabaseServerClient>>;
   event: EventRow;
   existing: SettlementRow;
+  financeRpc: FinanceRpc;
 }): Promise<SettlementRow> {
   if (
     existing.total_revenue_cents <= 0 ||
@@ -624,7 +636,7 @@ async function healLegacySplit({
     return existing;
   }
 
-  const { data: financeRows, error } = await supabase.rpc("event_finance", {
+  const { data: financeRows, error } = await supabase.rpc(financeRpc, {
     p_event_id: event.id,
   });
   if (error || !financeRows?.length) return existing;
