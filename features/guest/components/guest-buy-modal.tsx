@@ -207,7 +207,7 @@ export function GuestBuyModal({
         disabled={purchasing}
         className="w-full cursor-pointer rounded-[10px] border-none bg-neon-2 px-4 py-3.5 text-[15px] font-bold tracking-[1px] text-white disabled:opacity-60"
       >
-        {purchasing ? "REDIRECTING…" : `PAY ${selected.price}`}
+        {purchasing ? "PROCESSING…" : `PAY ${selected.price}`}
       </button>
 
       <div className="mt-3 rounded-lg border border-neon/10 bg-neon/5 px-3 py-2.5 text-[11px] leading-[1.6] text-muted">
