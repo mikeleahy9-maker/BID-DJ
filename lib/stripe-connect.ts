@@ -293,3 +293,24 @@ export async function createOrganizationOnboardingLink(params: {
 
   return link.url;
 }
+
+/**
+ * Mints a signed-in, single-use URL that drops the organizer straight into
+ * their Stripe Express dashboard (balance, payouts, earnings).
+ *
+ * This is the Account Login Link API, which is distinct from the v2 Account
+ * Link above: an account link starts onboarding, a login link signs an already
+ * onboarded account in. It is available because the account was created with
+ * `dashboard: "express"`; Stripe returns an error for accounts without the
+ * Express dashboard.
+ *
+ * The returned URL is single-use and short-lived, so it must never be emailed
+ * or reused. The caller emails our own stable redirect route instead, which
+ * mints a fresh link here on every visit.
+ */
+export async function createExpressDashboardLoginLink(
+  accountId: string
+): Promise<string> {
+  const link = await getStripe().accounts.createLoginLink(accountId);
+  return link.url;
+}

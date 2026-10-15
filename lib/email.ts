@@ -184,6 +184,109 @@ export function organizerInviteEmail(params: {
   return { subject, html, text };
 }
 
+/** Cents to a human dollar amount, e.g. 4110 -> "$41.10". */
+function formatCents(cents: number): string {
+  return `$${(cents / 100).toFixed(2)}`;
+}
+
+/**
+ * The "your share has been transferred" email sent to an organizer once the
+ * event's money has actually moved into their Stripe Express account.
+ *
+ * The button points at our stable redirect route (never a raw Stripe login
+ * link, which is single-use and expires within minutes). Following it mints a
+ * fresh login link and drops them into the Express dashboard, where Stripe
+ * authenticates them; no BidaBeat account is involved.
+ */
+export function organizerSettlementEmail(params: {
+  organizerName: string;
+  eventName: string;
+  amountCents: number;
+  dashboardUrl: string;
+}): { subject: string; html: string; text: string } {
+  const organizerName = escapeHtml(params.organizerName);
+  const eventName = escapeHtml(params.eventName);
+  const amount = formatCents(params.amountCents);
+  const dashboardUrl = params.dashboardUrl;
+
+  const subject = `You've been paid ${amount} for ${params.eventName}`;
+
+  const text = [
+    `Hi ${params.organizerName},`,
+    "",
+    `${amount} from ${params.eventName} has been transferred to your Stripe ` +
+      `account. It is now in your Stripe balance; the deposit to your bank ` +
+      `follows your payout schedule.`,
+    "",
+    "View your payout details, balance and upcoming deposits in your secure " +
+      "Stripe dashboard (no BidaBeat account needed):",
+    "",
+    `View payout details: ${dashboardUrl}`,
+    "",
+    "This link is personal to you, and you can reopen it from this email at any " +
+      "time.",
+    "",
+    "— BidaBeat",
+  ].join("\n");
+
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#080808;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#080808;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#111111;border:1px solid #2a2a2a;border-radius:16px;">
+            <tr>
+              <td style="padding:28px 28px 4px;font-family:Arial,Helvetica,sans-serif;font-size:22px;letter-spacing:2px;font-weight:bold;color:#00ffe1;">
+                BIDABEAT
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:16px;line-height:1.6;">
+                Hi ${organizerName},
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:15px;line-height:1.6;">
+                <strong>${amount}</strong> from <strong>${eventName}</strong> has
+                been transferred to your Stripe account. It is now in your Stripe
+                balance; the deposit to your bank follows your payout schedule.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#888888;font-size:14px;line-height:1.6;">
+                View your balance, upcoming deposits and payout history in your
+                secure Stripe dashboard. You do not need a BidaBeat account.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:26px 28px 6px;">
+                <a href="${dashboardUrl}" style="display:inline-block;background:#00ffe1;color:#080808;text-decoration:none;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;padding:14px 30px;border-radius:10px;">
+                  View Payout Details
+                </a>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:14px 28px 28px;font-family:Arial,Helvetica,sans-serif;color:#666666;font-size:12px;line-height:1.6;">
+                This link is personal to you, and you can reopen it from this
+                email at any time. If the button does not work, copy this address
+                into your browser:<br />
+                <span style="color:#00ffe1;word-break:break-all;">${dashboardUrl}</span>
+              </td>
+            </tr>
+          </table>
+          <div style="max-width:520px;padding:16px 8px 0;font-family:Arial,Helvetica,sans-serif;color:#666666;font-size:11px;text-align:center;">
+            Sent by BidaBeat &middot; ${escapeHtml(getAppHost())}
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  return { subject, html, text };
+}
+
 /** Booking dates arrive as `YYYY-MM-DD`; render them the way a human reads them. */
 function formatBookingDate(value: string): string {
   const parsed = new Date(`${value}T00:00:00`);

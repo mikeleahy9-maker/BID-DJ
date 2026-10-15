@@ -3,6 +3,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getStripeOrNull } from "@/lib/stripe";
 import { fetchDjConnectAccountStatus } from "@/lib/stripe-connect";
+import { organizerSettlementEmail, sendEmail } from "@/lib/email";
+import { organizerDashboardUrl } from "@/lib/organizer-dashboard-token";
 
 /**
  * Event settlement: the moment a DJ ends a live gig.
@@ -129,6 +131,12 @@ interface SettlementRow {
   organizer_status: LegStatus;
   organizer_attempt: number;
   organizer_failure_reason: string | null;
+  /**
+   * When the organizer was emailed that their share landed in their Stripe
+   * account. NULL means "not told yet"; the sweep claims this atomically so a
+   * re-run never emails the same organizer twice.
+   */
+  organizer_notified_at: string | null;
   dj_status: LegStatus;
   dj_attempt: number;
   dj_failure_reason: string | null;
@@ -156,8 +164,9 @@ const SETTLEMENT_SELECT = `
   dj_cents, dj_gross_cents, dj_fee_cents, platform_cents, organizer_rate,
   dj_rate, platform_rate, organization_id, organization_stripe_account_id,
   organizer_status,
-  organizer_attempt, organizer_failure_reason, dj_status, dj_attempt,
-  dj_failure_reason, created_at, updated_at`;
+  organizer_attempt, organizer_failure_reason, organizer_notified_at,
+  dj_status,
+  dj_attempt, dj_failure_reason, created_at, updated_at`;
 
 /** Reads readiness without letting a Stripe lookup abort the whole close. */
 async function recipientReady(accountId: string | null): Promise<{
@@ -888,13 +897,22 @@ export async function retryOutstandingSettlements(): Promise<number> {
     ),
   ];
   const orgAccountsById = new Map<string, string | null>();
+  // Contact details for the "you got paid" email, fetched alongside the account
+  // id so the sweep does not need a second query.
+  const orgContactById = new Map<string, { name: string; email: string }>();
   if (orgIds.length > 0) {
     const { data: orgRows } = await admin
       .from("organizations")
-      .select("id, stripe_account_id")
+      .select("id, stripe_account_id, name, contact_email")
       .in("id", orgIds);
     for (const org of orgRows ?? []) {
       orgAccountsById.set(org.id, org.stripe_account_id ?? null);
+      if (org.contact_email) {
+        orgContactById.set(org.id, {
+          name: org.name ?? "",
+          email: org.contact_email,
+        });
+      }
     }
   }
 
@@ -981,6 +999,20 @@ export async function retryOutstandingSettlements(): Promise<number> {
     }
     if (row.organizer_status !== "sent" && after?.organizer_status === "sent") {
       released += 1;
+      // The money has landed in the organizer's Express account: tell them,
+      // with a reopenable link to their payout dashboard. The claim inside makes
+      // this once-only even though the sweep itself re-runs.
+      // Prefer the live event link: it is what the sweep already resolved as
+      // authoritative (the settlement snapshot can predate a late organizer).
+      const orgId = event.organization_id ?? after.organization_id;
+      await notifyOrganizerPayout({
+        admin,
+        settlementId: row.id,
+        organizationId: orgId,
+        eventName: event.name,
+        amountCents: after.organizer_cents,
+        contact: orgId ? orgContactById.get(orgId) ?? null : null,
+      });
     }
     if (row.dj_status !== "sent" && after?.dj_status === "sent") {
       released += 1;
@@ -991,6 +1023,81 @@ export async function retryOutstandingSettlements(): Promise<number> {
     console.info(`[settlement] released ${released} outstanding share(s)`);
   }
   return released;
+}
+
+/**
+ * Emails an organizer that their share was transferred, exactly once.
+ *
+ * The sweep re-runs on a schedule and on Stripe webhooks, so it can observe the
+ * same "organizer leg just became sent" transition more than once. The guard is
+ * a conditional update that only succeeds while `organizer_notified_at` is NULL:
+ * whoever wins that update sends the email, everyone else skips. The claim is
+ * deliberately not touching `updated_at`, because that timestamp gates the
+ * ambiguous-transfer retry window and this notification has nothing to do with it.
+ *
+ * If the send fails the claim is released so a later sweep retries. Failures
+ * here are logged and swallowed: notification is a side channel, and it must
+ * never fail a settlement that has already moved real money.
+ */
+async function notifyOrganizerPayout({
+  admin,
+  settlementId,
+  organizationId,
+  eventName,
+  amountCents,
+  contact,
+}: {
+  admin: SupabaseClient;
+  settlementId: string;
+  organizationId: string | null;
+  eventName: string;
+  amountCents: number;
+  contact: { name: string; email: string } | null;
+}): Promise<void> {
+  if (amountCents <= 0 || !organizationId) return;
+  if (!contact?.email) {
+    console.warn(
+      `[settlement] organizer ${organizationId} was paid but has no contact email to notify`
+    );
+    return;
+  }
+
+  const { data: claimed, error: claimError } = await admin
+    .from("event_settlements")
+    .update({ organizer_notified_at: new Date().toISOString() })
+    .eq("id", settlementId)
+    .is("organizer_notified_at", null)
+    .select("id");
+
+  if (claimError) {
+    console.error("[settlement] could not claim the organizer notification:", claimError);
+    return;
+  }
+  if (!claimed?.length) return; // already notified (or claimed by a concurrent run)
+
+  const delivery = await sendEmail({
+    to: contact.email,
+    ...organizerSettlementEmail({
+      organizerName: contact.name || "there",
+      eventName,
+      amountCents,
+      dashboardUrl: organizerDashboardUrl({ organizationId }),
+    }),
+  });
+  if (delivery.ok) return;
+
+  console.error("[settlement] could not email the organizer:", delivery.error);
+  // Release the claim so the next sweep can try again (e.g. SendGrid was down).
+  const { error: releaseError } = await admin
+    .from("event_settlements")
+    .update({ organizer_notified_at: null })
+    .eq("id", settlementId);
+  if (releaseError) {
+    console.error(
+      "[settlement] could not release the organizer notification:",
+      releaseError
+    );
+  }
 }
 
 /**
