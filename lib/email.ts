@@ -190,6 +190,87 @@ function formatCents(cents: number): string {
 }
 
 /**
+ * The "credit purchase confirmed" receipt emailed to the guest.
+ */
+export function guestCreditPurchaseEmail(params: {
+  guestName: string;
+  eventName: string;
+  packLabel: string;
+  credits: number;
+  amountCents: number;
+  newBalance: number;
+}): { subject: string; html: string; text: string } {
+  const guestName = escapeHtml(params.guestName);
+  const eventName = escapeHtml(params.eventName);
+  const packLabel = escapeHtml(params.packLabel);
+  const amount = formatCents(params.amountCents);
+  const newBalance = params.newBalance;
+
+  const subject = `Your ${params.packLabel} purchase for ${params.eventName}`;
+
+  const text = [
+    `Hi ${params.guestName},`,
+    "",
+    `Thanks for buying ${params.packLabel} (${params.credits} credits) for ${params.eventName}.`,
+    `Amount: ${amount}`,
+    `Your new credit balance: ${newBalance} credits`,
+    "",
+    "Use your credits to request songs and bid to move up the queue.",
+    "",
+    "— BidaBeat",
+  ].join("\n");
+
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#080808;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#080808;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#111111;border:1px solid #2a2a2a;border-radius:16px;">
+            <tr>
+              <td style="padding:28px 28px 4px;font-family:Arial,Helvetica,sans-serif;font-size:22px;letter-spacing:2px;font-weight:bold;color:#00ffe1;">
+                BIDABEAT
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:16px;line-height:1.6;">
+                Hi ${guestName},
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:15px;line-height:1.6;">
+                Thanks for buying <strong>${packLabel}</strong> (<strong>${params.credits} credits</strong>) for <strong>${eventName}</strong>.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:15px;line-height:1.6;">
+                Amount: <strong>${amount}</strong>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:15px;line-height:1.6;">
+                Your new credit balance: <strong>${newBalance} credits</strong>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#888888;font-size:14px;line-height:1.6;">
+                Use your credits to request songs and bid to move up the queue.
+              </td>
+            </tr>
+          </table>
+          <div style="max-width:520px;padding:16px 8px 0;font-family:Arial,Helvetica,sans-serif;color:#666666;font-size:11px;text-align:center;">
+            Sent by BidaBeat &middot; ${escapeHtml(getAppHost())}
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  return { subject, html, text };
+}
+
+/**
  * The "your share has been transferred" email sent to an organizer once the
  * event's money has actually moved into their Stripe Express account.
  *

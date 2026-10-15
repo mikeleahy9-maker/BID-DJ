@@ -7,6 +7,7 @@ import {
 } from "@/lib/stripe-connect";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { readChargeFee, retryOutstandingSettlements } from "@/lib/settlement";
+import { sendEmail, guestCreditPurchaseEmail } from "@/lib/email";
 import {
   recordTip,
   resolveTipNickname,
@@ -575,6 +576,45 @@ async function fulfillCreditPurchase(
     `[webhook stripe] recorded ${reference}: ${data?.credits_granted ?? pack.credits} credits ` +
       `(${data?.revenue_cents ?? pack.revenueCents}c) for ${userId} on event ${eventId}`
   );
+
+  // Best-effort purchase confirmation email to the guest.
+  // Runs after the purchase is committed so the balance is accurate.
+  // Never throws: email is a side channel, the purchase itself succeeded.
+  try {
+    const admin = getSupabaseAdmin();
+
+    const [guestRes, eventRes, attendeeRes] = await Promise.all([
+      admin.from("profiles").select("first_name, last_name, email, act_name, display_name").eq("id", userId).maybeSingle(),
+      admin.from("events").select("name").eq("id", eventId).maybeSingle(),
+      admin.from("attendees").select("credit_balance").eq("event_id", eventId).eq("user_id", userId).maybeSingle(),
+    ]);
+
+    const guest = guestRes.data;
+    const event = eventRes.data;
+    const attendee = attendeeRes.data;
+
+    if (guest?.email && event?.name) {
+      const guestName = guest.act_name || guest.display_name || [guest.first_name, guest.last_name].filter(Boolean).join(" ") || "there";
+      const newBalance = attendee?.credit_balance ?? pack.credits;
+
+      const delivery = await sendEmail({
+        to: guest.email,
+        ...guestCreditPurchaseEmail({
+          guestName,
+          eventName: event.name,
+          packLabel: pack.label,
+          credits: pack.credits,
+          amountCents: pack.revenueCents,
+          newBalance,
+        }),
+      });
+      if (!delivery.ok) {
+        console.warn(`[webhook stripe] could not email guest ${guest.email}:`, delivery.error);
+      }
+    }
+  } catch (err) {
+    console.warn("[webhook stripe] guest purchase email failed (non-fatal):", err);
+  }
 
   // Capture Stripe's fee now, while we already know the intent, so the event
   // preview shows a net split instead of discovering the fees at close time.
