@@ -69,12 +69,30 @@ export default async function DJLayout({ children }: { children: React.ReactNode
   const displayName =
     profile?.act_name || profile?.first_name || profile?.last_name || "Your";
 
+  let liveEvent: { id: string; code: string; name: string } | null = null;
+  if (user && role === "dj" && activated) {
+    const { data } = await supabase
+      .from("events")
+      .select("id, code, name")
+      .eq("dj_id", user.id)
+      .eq("status", "live")
+      .limit(1);
+    if (data && data.length > 0) {
+      liveEvent = {
+        id: data[0].id as string,
+        code: data[0].code as string,
+        name: data[0].name as string,
+      };
+    }
+  }
+
   return (
     <DjShell
       profileName={profileName}
       accountLabel={accountLabel}
       avatarUrl={profile?.avatar_url ?? null}
       isOwner={role === "dj"}
+      liveEvent={liveEvent}
     >
       {locked && <DJActivationBanner />}
       {locked ? <ActivationGate name={displayName} /> : children}

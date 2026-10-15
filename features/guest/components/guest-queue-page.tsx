@@ -23,7 +23,13 @@ export interface GuestQueueEvent {
   code: string;
 }
 
-export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
+export function GuestQueuePage({
+  event,
+  isPreview = false,
+}: {
+  event: GuestQueueEvent;
+  isPreview?: boolean;
+}) {
   const router = useRouter();
   const { show, toastNode } = useToast();
 
@@ -261,6 +267,109 @@ export function GuestQueuePage({ event }: { event: GuestQueueEvent }) {
       </div>
     );
   };
+
+  // Read-only copy of the bid ladder for the DJ's guest-view preview.
+  const renderBidControlsDisabled = () => {
+    return (
+      <div className="flex flex-col gap-2 opacity-50 pointer-events-none">
+        <div className="grid grid-cols-4 gap-2">
+          {["+1 💎", "+5 💎", "-1 👎", "-3 👎"].map((label, i) => {
+            const cls = [
+              "border-neon text-neon",
+              "border-neon-3 text-neon-3",
+              "border-neon-2 text-neon-2",
+              "border-[#aa1144] text-[#ff6699]",
+            ][i];
+            return (
+              <button
+                key={label}
+                className={`rounded-lg border bg-surface-2 px-1 py-2 text-[11px] font-bold tracking-[0.3px] ${cls}`}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        <button className="w-full rounded-lg border border-neon-3/40 bg-[linear-gradient(135deg,rgba(255,230,0,0.12),rgba(255,136,0,0.1))] px-2.5 py-[9px] text-[12px] font-extrabold tracking-[0.5px] text-neon-3">
+          🔥 BID ALL — {available} 💎
+        </button>
+      </div>
+    );
+  };
+
+  // DJ's read-only "guest view" preview: the exact queue a guest sees, with the
+  // buy/request/bid controls shown but disabled.
+  if (isPreview) {
+    return (
+      <div className="min-h-full">
+        <PageContainer className="py-7 md:px-6 md:py-8">
+          <div className="mb-5 text-[11px] uppercase tracking-[2px] text-muted">
+            <span
+              className="mr-1 inline-block h-2 w-2 animate-pulse rounded-full bg-neon-2"
+              aria-hidden
+            />
+            Live at {event.name}
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3 md:items-start md:gap-6">
+            <section className="md:col-span-3">
+              {/* Credits banner (disabled) */}
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-edge bg-[linear-gradient(135deg,rgba(0,255,225,0.08),rgba(255,45,120,0.08))] px-4 py-4 sm:px-[18px]">
+                <div className="min-w-0">
+                  <div className="text-[11px] uppercase tracking-[1px] text-muted">
+                    Your Credits
+                  </div>
+                  <div className="font-display text-[30px] leading-none tracking-[2px] text-neon sm:text-[36px]">
+                    —
+                  </div>
+                </div>
+                <button
+                  disabled
+                  className="shrink-0 cursor-not-allowed rounded-lg border-none bg-neon-2 px-3 py-2.5 text-xs font-bold tracking-[0.5px] text-white opacity-40 sm:px-3.5"
+                >
+                  + BUY MORE
+                </button>
+              </div>
+
+              {/* Request a Song (disabled) */}
+              <button
+                disabled
+                className="mb-[18px] flex w-full cursor-not-allowed items-center gap-3.5 rounded-xl border-none bg-[linear-gradient(135deg,#00ffe1,#00c9b1)] px-[18px] py-4 text-left text-bg opacity-50 shadow-[0_0_24px_rgba(0,255,225,0.2)]"
+              >
+                <span className="text-xl" aria-hidden>🎵</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-display text-[18px] tracking-[1.5px]">
+                    Request a Song
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-bg/65">
+                    Search any song &amp; send it to the DJ — costs 2 credits
+                  </span>
+                </span>
+                <span className="ml-auto text-xl" aria-hidden>→</span>
+              </button>
+
+              {/* Live queue */}
+              <div className="mb-2.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                <div className="min-w-0 text-[11px] uppercase tracking-[2px] text-muted">
+                  <span className="mr-1 inline-block h-2 w-2 animate-pulse rounded-full bg-neon-2" aria-hidden />
+                  Live Queue — Bid to Move Up
+                </div>
+                <div className="min-w-0 flex-1 truncate text-right text-[11px] text-muted sm:flex-none sm:text-left">
+                  {event.djName} is spinning
+                </div>
+              </div>
+
+              <LiveBoard
+                tracks={tracks}
+                emptyText="No songs on the board yet."
+                bidControls={renderBidControlsDisabled}
+              />
+            </section>
+          </div>
+        </PageContainer>
+      </div>
+    );
+  }
 
   if (eventEnded) {
     return <EventEndedOverlay redirectTo="/dashboard" />;

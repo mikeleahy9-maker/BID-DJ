@@ -4,6 +4,7 @@ import { ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Logo } from "@/components/shared/logo";
+import { GuestQueuePage } from "@/features/guest/components/guest-queue-page";
 import { useToast } from "@/components/ui/use-toast";
 import { getSupabaseClient } from "@/lib/supabase/client";
 
@@ -25,12 +26,19 @@ function isActivePath(pathname: string, href: string): boolean {
   return pathname.startsWith(href);
 }
 
+interface LiveEvent {
+  id: string;
+  code: string;
+  name: string;
+}
+
 interface DjShellProps {
   children: ReactNode;
   profileName?: string;
   accountLabel?: string;
   avatarUrl?: string | null;
   isOwner?: boolean;
+  liveEvent?: LiveEvent | null;
 }
 
 /**
@@ -78,12 +86,16 @@ export function DjShell({
   accountLabel = "owner account",
   avatarUrl = null,
   isOwner = true,
+  liveEvent = null,
 }: DjShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const { show, toastNode } = useToast();
+
+  const togglePreview = () => setPreviewOpen((prev) => !prev);
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -183,6 +195,15 @@ export function DjShell({
           <span className="ml-auto truncate text-[13px] font-semibold text-muted">
             {activeLabel}
           </span>
+          <button
+            onClick={togglePreview}
+            disabled={!liveEvent}
+            aria-label={previewOpen ? "Back from preview" : "Guest preview"}
+            title={liveEvent ? "See how guests see the queue" : "No live event right now"}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-neon-2 px-2.5 py-1.5 text-[11px] font-semibold text-neon-2 transition hover:bg-neon-2/10 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {previewOpen ? "← Back" : "👁 Preview"}
+          </button>
         </header>
 
         {/* ---- Desktop top bar ---- */}
@@ -190,10 +211,12 @@ export function DjShell({
           <h1 className="text-lg font-semibold">{activeLabel}</h1>
           <div className="ml-auto flex items-center gap-2">
             <button
-              onClick={() => show("Guest preview toggled (demo)")}
-              className="rounded-full border border-neon-2 px-3 py-1.5 text-xs font-semibold text-neon-2 transition hover:bg-neon-2/10"
+              onClick={togglePreview}
+              disabled={!liveEvent}
+              title={liveEvent ? "See how guests see the queue" : "No live event right now"}
+              className="rounded-full border border-neon-2 px-3 py-1.5 text-xs font-semibold text-neon-2 transition hover:bg-neon-2/10 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              👁 Preview
+              {previewOpen ? "← Back" : "👁 Preview"}
             </button>
             <span className="flex items-center gap-2 rounded-full border border-neon-3 py-1 pl-1 pr-3 text-xs font-semibold text-neon-3">
               <DjAvatar
@@ -266,7 +289,32 @@ export function DjShell({
 
         {/* ---- Main content ---- */}
         <main className="pt-0 lg:ml-60">
-          <div className="px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-10">{children}</div>
+          {liveEvent && previewOpen ? (
+            <>
+              <div className="sticky top-14 z-20 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-neon-2 px-3 py-2.5 text-center text-[10px] font-bold tracking-[0.4px] text-white sm:text-xs sm:tracking-[1px]">
+                <span className="min-w-0">👁 GUEST PREVIEW — this is what your crowd sees</span>
+                <button
+                  onClick={togglePreview}
+                  className="shrink-0 rounded-md bg-white/25 px-2 py-1 text-[10px] font-bold tracking-[0.4px] text-white transition hover:bg-white/35 sm:text-[11px]"
+                >
+                  ← Back
+                </button>
+              </div>
+              <div className="pb-24 lg:pb-10">
+                <GuestQueuePage
+                  event={{
+                    id: liveEvent.id,
+                    code: liveEvent.code,
+                    name: liveEvent.name,
+                    djName: profileName,
+                  }}
+                  isPreview
+                />
+              </div>
+            </>
+          ) : (
+            <div className="px-4 py-6 pb-24 sm:px-6 lg:px-8 lg:pb-10">{children}</div>
+          )}
         </main>
 
         {toastNode}

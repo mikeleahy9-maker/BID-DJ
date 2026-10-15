@@ -135,6 +135,18 @@ export function useLiveQueue(eventId: string) {
     const supabase = getSupabaseClient();
     let active = true;
 
+    // Unique topic per subscription. supabase-js keys channels by name and
+    // hands back an already-subscribed channel for a repeated name, so the
+    // second `.on()` throws "cannot add postgres_changes callbacks ... after
+    // subscribe()". Two consumers can share an event at once (the DJ's queue
+    // page and the guest preview modal), and React's dev double-invoke can
+    // re-run this effect while the previous channel is still tearing down, so
+    // every run gets its own name rather than a fixed `live-queue-${eventId}`.
+    const topic =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
+
     supabase.auth.getUser().then((res: { data: { user: { id: string } | null } }) => {
       if (active) setMeId(res.data.user?.id ?? null);
     });
@@ -151,8 +163,8 @@ export function useLiveQueue(eventId: string) {
     };
     load();
 
-    const channel = supabase
-      .channel(`live-queue-${eventId}`)
+    const channel = supabase.channel(`live-queue-${eventId}-${topic}`);
+    channel
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "event_tracks", filter: `event_id=eq.${eventId}` },
@@ -176,8 +188,8 @@ export function useLiveQueue(eventId: string) {
           }
           setAllRequests((prev) => upsertById(prev, mapRequest(payload.new as RequestRow)));
         }
-      )
-      .subscribe();
+      );
+    channel.subscribe();
 
     return () => {
       active = false;
