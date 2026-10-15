@@ -28,6 +28,8 @@ export async function PATCH(req: NextRequest) {
   const str = (key: string) => String(form.get(key) ?? "").trim();
 
   const actName = str("actName");
+  const firstName = str("firstName");
+  const lastName = str("lastName");
   const description = str("description");
   const city = str("city");
   const rawTags = str("tags");
@@ -54,7 +56,10 @@ export async function PATCH(req: NextRequest) {
 
   const supabase = await getSupabaseServerClient();
 
+  const keepPhoto = str("keepPhoto") === "1";
+
   let avatarUrl: string | null = null;
+  let hasNewPhoto = false;
   const photo = form.get("photo");
   if (photo instanceof File && photo.size > 0) {
     if (photo.size > 10 * 1024 * 1024) {
@@ -86,21 +91,26 @@ export async function PATCH(req: NextRequest) {
       );
     }
     avatarUrl = admin.storage.from(LOGO_BUCKET).getPublicUrl(path).data.publicUrl;
+    hasNewPhoto = true;
   }
 
   const patch: Record<string, unknown> = {
     act_name: actName,
+    first_name: firstName || null,
+    last_name: lastName || null,
     description: description || null,
     city: city || null,
     tags,
-    avatar_url: avatarUrl,
   };
+  if (hasNewPhoto || !keepPhoto) {
+    patch.avatar_url = avatarUrl;
+  }
 
   const { data, error } = await supabase
     .from("profiles")
     .update(patch)
     .eq("id", user.id)
-    .select("act_name, description, city, tags, avatar_url")
+    .select("act_name, first_name, last_name, description, city, tags, avatar_url")
     .single();
 
   if (error) throw error;

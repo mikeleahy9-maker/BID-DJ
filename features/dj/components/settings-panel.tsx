@@ -11,6 +11,8 @@ const MAX_TAGS_HINT = `Add up to ${MAX_TAGS} tags`;
 
 interface SettingsInitial {
   actName: string;
+  firstName: string;
+  lastName: string;
   email: string;
   city: string;
   description: string;
@@ -33,6 +35,8 @@ export default function SettingsPanel({ initial }: { initial: SettingsInitial })
   const { show, toastNode } = useToast();
 
   const [actName, setActName] = useState(initial.actName);
+  const [firstName, setFirstName] = useState(initial.firstName);
+  const [lastName, setLastName] = useState(initial.lastName);
   const [city, setCity] = useState(initial.city);
   const [description, setDescription] = useState(initial.description);
   const [tags, setTags] = useState<string[]>(initial.tags);
@@ -84,9 +88,12 @@ export default function SettingsPanel({ initial }: { initial: SettingsInitial })
     try {
       const fd = new FormData();
       fd.set("actName", actName.trim());
+      fd.set("firstName", firstName.trim());
+      fd.set("lastName", lastName.trim());
       fd.set("description", description.trim());
       fd.set("city", city.trim());
       fd.set("tags", JSON.stringify(tags));
+      fd.set("keepPhoto", avatarUrl ? "1" : "0");
       const photo = photoInputRef.current?.files?.[0];
       if (photo) fd.set("photo", photo);
 
@@ -159,6 +166,29 @@ export default function SettingsPanel({ initial }: { initial: SettingsInitial })
               )}
             </div>
             <span className="text-[10px] text-muted">PNG, JPG or WEBP · max 10MB</span>
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex flex-1 flex-col gap-1.5">
+            <label className={labelCls}>First Name</label>
+            <input
+              className={inputCls}
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              placeholder="Alex"
+              autoComplete="given-name"
+            />
+          </div>
+          <div className="flex flex-1 flex-col gap-1.5">
+            <label className={labelCls}>Last Name</label>
+            <input
+              className={inputCls}
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              placeholder="Rivera"
+              autoComplete="family-name"
+            />
           </div>
         </div>
 
@@ -287,7 +317,8 @@ export default function SettingsPanel({ initial }: { initial: SettingsInitial })
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-lg border border-edge bg-surface px-4 py-2 text-xs font-bold text-foreground transition hover:border-neon hover:text-neon"
               >
-                <span aria-hidden>👁</span> View
+                <EyeIcon className="h-4 w-4" />
+                View
               </Link>
               <ShareProfileButton url={initial.publicUrl} />
             </div>
@@ -321,23 +352,30 @@ export default function SettingsPanel({ initial }: { initial: SettingsInitial })
         </div>
         <p className="text-[10px] leading-[1.6] text-muted">
           Unused guest credits are auto-donated to the organizer and are
-          included in the split. Payouts arrive 2–3 business days after event
+          included in the split. Payouts arrive 7–8 business days after event
           end.
         </p>
       </section>
 
-      {/* Danger zone */}
-      <section className={`${section} border-neon-2/30`}>
-        <h2 className="font-display text-lg tracking-[1.5px] text-neon-2">Danger Zone</h2>
-        <button
-          onClick={() => show("Contact support to delete your account")}
-          className="self-start cursor-pointer rounded-lg border border-neon-2 px-4 py-2 text-xs font-bold text-neon-2 transition hover:bg-neon-2/10"
-        >
-          Delete Account
-        </button>
-      </section>
-
       {toastNode}
     </div>
+  );
+}
+
+function EyeIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
   );
 }

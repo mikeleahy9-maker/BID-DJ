@@ -449,6 +449,15 @@ export default function EventSetupPanel({
           </div>
         </div>
 
+        {/* Organizer invite */}
+        <div className="mb-5">
+          <OrganizerInvite
+            eventId={dbRow.id}
+            locked={row.status !== "draft"}
+            onChange={refreshOrganizer}
+          />
+        </div>
+
         {/* Seed playlist */}
         <div className="mb-2 flex items-center justify-between">
           <div>
@@ -548,12 +557,6 @@ export default function EventSetupPanel({
           </p>
         )}
       </div>
-
-      <OrganizerInvite
-        eventId={dbRow.id}
-        locked={row.status !== "draft"}
-        onChange={refreshOrganizer}
-      />
 
       {/* ---- Edit event modal ---- */}
       <Modal open={showEdit} onClose={() => setShowEdit(false)}>

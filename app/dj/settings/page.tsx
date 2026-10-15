@@ -11,13 +11,15 @@ export default async function DJSettingsPage() {
   const { data: profile } = user
     ? await supabase
         .from("profiles")
-        .select("act_name, display_name, email, city, description, tags, avatar_url, public_slug")
+        .select("act_name, display_name, email, city, description, tags, avatar_url, public_slug, first_name, last_name")
         .eq("id", user.id)
         .maybeSingle()
     : { data: null };
 
   const initial = {
     actName: profile?.act_name ?? "",
+    firstName: profile?.first_name ?? "",
+    lastName: profile?.last_name ?? "",
     email: profile?.email ?? user?.email ?? "",
     city: profile?.city ?? "",
     description: profile?.description ?? "",
