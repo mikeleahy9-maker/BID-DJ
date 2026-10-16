@@ -43,6 +43,7 @@ export default function SettingsPanel({ initial }: { initial: SettingsInitial })
   const [tagInput, setTagInput] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(initial.avatarUrl);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState(false);
   const [saving, setSaving] = useState(false);
   const photoInputRef = useRef<HTMLInputElement>(null);
 
@@ -53,6 +54,7 @@ export default function SettingsPanel({ initial }: { initial: SettingsInitial })
 
   const previewPhoto = (file?: File) => {
     if (!file) return;
+    setPhotoError(false);
     const reader = new FileReader();
     reader.onload = (e) => {
       if (typeof e.target?.result === "string") setPhotoPreview(e.target.result);
@@ -108,6 +110,7 @@ export default function SettingsPanel({ initial }: { initial: SettingsInitial })
       }
       if (photoInputRef.current) photoInputRef.current.value = "";
       setPhotoPreview(null);
+      setPhotoError(false);
       show("Profile saved!");
       router.refresh();
     } catch {
@@ -128,10 +131,15 @@ export default function SettingsPanel({ initial }: { initial: SettingsInitial })
         {/* Photo */}
         <div className="flex items-center gap-4">
           <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-surface-2 text-3xl">
-            {shownAvatar && shownAvatar.startsWith("http") ? (
+            {shownAvatar && !photoError && (shownAvatar.startsWith("http") || shownAvatar.startsWith("data:")) ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={shownAvatar} alt="Profile" className="h-full w-full object-cover" />
-            ) : shownAvatar && !shownAvatar.startsWith("http") ? (
+              <img
+                src={shownAvatar}
+                alt="Profile"
+                className="h-full w-full object-cover"
+                onError={() => setPhotoError(true)}
+              />
+            ) : shownAvatar ? (
               shownAvatar
             ) : (
               <span aria-hidden>🎛️</span>
@@ -157,6 +165,7 @@ export default function SettingsPanel({ initial }: { initial: SettingsInitial })
                   onClick={() => {
                     setAvatarUrl(null);
                     setPhotoPreview(null);
+                    setPhotoError(false);
                     if (photoInputRef.current) photoInputRef.current.value = "";
                   }}
                   className="rounded-lg border border-edge bg-surface-2 px-4 py-2 text-xs font-bold text-muted transition hover:border-neon-2 hover:text-neon-2"
