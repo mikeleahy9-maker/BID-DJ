@@ -138,11 +138,11 @@ export function GuestDashboard({ data }: { data: GuestDashboardData }) {
       label: "Payment Methods",
       onClick: () => router.push("/payment-method"),
     },
-    {
-      icon: "🔔",
-      label: "Notifications",
-      onClick: () => show("Notifications settings - coming soon"),
-    },
+    // {
+    //   icon: "🔔",
+    //   label: "Notifications",
+    //   onClick: () => show("Notifications settings - coming soon"),
+    // },
     {
       icon: "👤",
       label: "Edit Profile",

@@ -117,13 +117,6 @@ export interface PlaceBidResult {
   maxDown?: number;
 }
 
-export interface RefundTrackResult {
-  /** Total credits paid back out to guests across every stake on the track. */
-  refunded: number;
-  /** Distinct guests who had a stake on the track. */
-  holders: number;
-}
-
 export function useLiveQueue(eventId: string) {
   const [tracks, setTracks] = useState<LiveTrack[]>([]);
   const [allRequests, setAllRequests] = useState<LiveRequest[]>([]);
@@ -327,33 +320,6 @@ export function useLiveQueue(eventId: string) {
     setTracks((prev) => prev.filter((t) => t.id !== trackId));
   }, []);
 
-  const refundTrack = useCallback(
-    async (trackId: string): Promise<RefundTrackResult> => {
-      const supabase = getSupabaseClient();
-      const { data, error } = await supabase.rpc("refund_track", {
-        p_track_id: trackId,
-      });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      const row = (data ?? {}) as {
-        ok?: boolean;
-        error?: string;
-        refunded?: number;
-        holders?: number;
-      };
-      if (!row.ok) throw new Error(row.error ?? "refund_failed");
-
-      return {
-        refunded: row.refunded ?? 0,
-        holders: row.holders ?? 0,
-      };
-    },
-    []
-  );
-
   const placeBid = useCallback(
     async (trackId: string, amount: number): Promise<PlaceBidResult> => {
       const supabase = getSupabaseClient();
@@ -424,7 +390,6 @@ export function useLiveQueue(eventId: string) {
     markPlayed,
     markPlayedLocal,
     removeTrackLocal,
-    refundTrack,
     placeBid,
     placeDownBid,
   };

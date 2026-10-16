@@ -271,6 +271,93 @@ export function guestCreditPurchaseEmail(params: {
 }
 
 /**
+ * The "your credits were returned" email sent to a guest when their stake on a
+ * song is refunded because the DJ removed it from the queue.
+ */
+export function guestSongRefundEmail(params: {
+  guestName: string;
+  eventName: string;
+  trackTitle: string;
+  trackArtist: string;
+  credits: number;
+  newBalance: number;
+}): { subject: string; html: string; text: string } {
+  const guestName = escapeHtml(params.guestName);
+  const eventName = escapeHtml(params.eventName);
+  const trackTitle = escapeHtml(params.trackTitle);
+  const trackArtist = escapeHtml(params.trackArtist);
+  const credits = params.credits;
+  const newBalance = params.newBalance;
+
+  const subject = `Your credits were refunded for "${params.trackTitle}"`;
+
+  const text = [
+    `Hi ${params.guestName},`,
+    "",
+    `"${params.trackTitle}" by ${params.trackArtist} was removed from the queue ` +
+      `at ${params.eventName}, so the credits you had on it have been returned.`,
+    "",
+    `Refunded: ${credits} credits`,
+    `Your new credit balance: ${newBalance} credits`,
+    "",
+    "You can put those credits toward another song request.",
+    "",
+    "— BidaBeat",
+  ].join("\n");
+
+  const html = `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#080808;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#080808;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#111111;border:1px solid #2a2a2a;border-radius:16px;">
+            <tr>
+              <td style="padding:28px 28px 4px;font-family:Arial,Helvetica,sans-serif;font-size:22px;letter-spacing:2px;font-weight:bold;color:#00ffe1;">
+                BIDABEAT
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:16px;line-height:1.6;">
+                Hi ${guestName},
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:15px;line-height:1.6;">
+                <strong>${trackTitle}</strong> by <strong>${trackArtist}</strong> was
+                removed from the queue at <strong>${eventName}</strong>, so the
+                credits you had on it have been returned.
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:15px;line-height:1.6;">
+                Refunded: <strong>${credits} credits</strong>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#f0f0f0;font-size:15px;line-height:1.6;">
+                Your new credit balance: <strong>${newBalance} credits</strong>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:12px 28px 0;font-family:Arial,Helvetica,sans-serif;color:#888888;font-size:14px;line-height:1.6;">
+                You can put those credits toward another song request.
+              </td>
+            </tr>
+          </table>
+          <div style="max-width:520px;padding:16px 8px 0;font-family:Arial,Helvetica,sans-serif;color:#666666;font-size:11px;text-align:center;">
+            Sent by BidaBeat &middot; ${escapeHtml(getAppHost())}
+          </div>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  return { subject, html, text };
+}
+
+/**
  * The "your share has been transferred" email sent to an organizer once the
  * event's money has actually moved into their Stripe Express account.
  *

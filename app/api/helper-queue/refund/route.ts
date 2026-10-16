@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readHelperSession } from "@/lib/helper-session";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { notifyRefundedGuests } from "@/lib/refund-notifications";
 
 /**
  * Helper queue actions for a track, pinned to the helper session's event.
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
 
     const { data: track, error: trackError } = await supabase
       .from("event_tracks")
-      .select("id, event_id, status")
+      .select("id, event_id, status, title, artist")
       .eq("id", trackId)
       .maybeSingle();
     if (trackError || !track) {
@@ -129,6 +130,15 @@ export async function POST(req: NextRequest) {
       .delete()
       .eq("id", trackId);
     if (deleteError) throw deleteError;
+
+    // Best-effort: tell every refunded guest their credits are back. Runs after
+    // the refund has committed so the balances it reads are already updated.
+    await notifyRefundedGuests({
+      eventId: helper.eventId,
+      trackTitle: track.title,
+      trackArtist: track.artist,
+      perUser,
+    });
 
     return NextResponse.json({
       ok: true,

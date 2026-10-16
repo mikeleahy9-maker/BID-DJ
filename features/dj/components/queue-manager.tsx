@@ -127,7 +127,6 @@ export default function QueueManager({
     markPlayed,
     markPlayedLocal,
     removeTrackLocal,
-    refundTrack,
   } = useLiveQueue(eventContext?.id ?? "");
 
   // A helper working the queue must be closed out if the DJ ends the event from
@@ -289,24 +288,27 @@ export default function QueueManager({
     setRefundTarget(null);
     try {
       const refunded = await (async () => {
-        if (helperMode) {
-          const res = await fetch("/api/helper-queue/refund", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ trackId: song.id }),
-          });
-          const body = (await res.json().catch(() => null)) as {
-            ok?: boolean;
-            error?: string;
-            refunded?: number;
-            holders?: number;
-          } | null;
-          if (!res.ok || !body?.ok) {
-            throw new Error(body?.error || "Could not refund the song.");
-          }
-          return { refunded: Number(body.refunded ?? 0), holders: Number(body.holders ?? 0) };
+        const endpoint = helperMode
+          ? "/api/helper-queue/refund"
+          : `/api/dj/events/${eventContext?.id}/tracks/${song.id}/refund`;
+        if (!helperMode && !eventContext?.id) {
+          throw new Error("No live event to refund from.");
         }
-        return refundTrack(song.id);
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ trackId: song.id }),
+        });
+        const body = (await res.json().catch(() => null)) as {
+          ok?: boolean;
+          error?: string;
+          refunded?: number;
+          holders?: number;
+        } | null;
+        if (!res.ok || !body?.ok) {
+          throw new Error(body?.error || "Could not refund the song.");
+        }
+        return { refunded: Number(body.refunded ?? 0), holders: Number(body.holders ?? 0) };
       })();
       removeTrackLocal(song.id);
       const who =
