@@ -152,7 +152,7 @@ export default function SignupForm() {
           noValidate
         >
           <FieldRow>
-            <Field label="First Name" className="flex-1">
+            <Field label="First Name" className="sm:flex-1">
               <Input
                 placeholder="First"
                 autoComplete="given-name"
@@ -160,7 +160,7 @@ export default function SignupForm() {
                 onChange={(e) => setFirstName(e.target.value)}
               />
             </Field>
-            <Field label="Last Name" className="flex-1">
+            <Field label="Last Name" className="sm:flex-1">
               <Input
                 placeholder="Last"
                 autoComplete="family-name"

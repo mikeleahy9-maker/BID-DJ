@@ -174,7 +174,7 @@ export default function DJSignupForm() {
 
       <form className="mb-3.5 flex flex-col gap-3.5" onSubmit={handleSubmit} noValidate>
         <FieldRow>
-          <Field label="First Name" className="flex-1">
+          <Field label="First Name" className="sm:flex-1">
             <Input
               placeholder="First"
               autoComplete="given-name"
@@ -182,7 +182,7 @@ export default function DJSignupForm() {
               onChange={(e) => setFirstName(e.target.value)}
             />
           </Field>
-          <Field label="Last Name" className="flex-1">
+          <Field label="Last Name" className="sm:flex-1">
             <Input
               placeholder="Last"
               autoComplete="family-name"

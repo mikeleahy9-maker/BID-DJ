@@ -39,12 +39,14 @@ export const Input = React.forwardRef<
 
 Input.displayName = "Input";
 
-/** Row wrapper that lays child Fields side by side. */
+/** Wrapper that lays child Fields side by side, stacking on small screens. */
 export const FieldRow: React.FC<{
   children: React.ReactNode;
   className?: string;
 }> = ({ children, className = "" }) => (
-  <div className={`flex gap-[10px] ${className}`}>{children}</div>
+  <div className={`flex flex-col gap-[10px] sm:flex-row ${className}`}>
+    {children}
+  </div>
 );
 
 export default Input;
