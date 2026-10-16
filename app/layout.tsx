@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Bebas_Neue, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { siteConfig } from "@/config/site";
+import { ScrollToTop } from "@/components/scroll-to-top";
 
 // Note: Removed validateEnv() from build time to allow Vercel deployment
 // Environment variables are validated at runtime when needed
@@ -65,6 +66,7 @@ export default function RootLayout({ children }: RootLayoutProps) {
         className="min-h-screen overflow-x-hidden bg-bg font-sans text-foreground"
         suppressHydrationWarning
       >
+        <ScrollToTop />
         {children}
       </body>
     </html>

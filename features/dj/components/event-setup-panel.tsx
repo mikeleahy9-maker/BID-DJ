@@ -386,7 +386,7 @@ export default function EventSetupPanel({
           <div className="mb-3 font-display text-base tracking-[1.5px] text-neon">
             🔐 Access Credentials
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             {[
               { label: "Event Code", value: ev.code, copy: true },
               { label: "Guest PIN", value: ev.ownerPin, copy: true },
@@ -431,7 +431,7 @@ export default function EventSetupPanel({
           <div className="mb-2 text-[11px] text-muted">
             Encodes: {appUrl}/join/{ev.code}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <button
               onClick={() => copyText(`${appUrl}/join/${ev.code}`, "Guest link")}
               className="flex-1 rounded-lg border border-edge bg-surface-2 px-3 py-2 text-xs font-bold text-foreground transition hover:border-neon hover:text-neon"
@@ -559,10 +559,19 @@ export default function EventSetupPanel({
       </div>
 
       {/* ---- Edit event modal ---- */}
-      <Modal open={showEdit} onClose={() => setShowEdit(false)}>
-        <div className="mb-1 flex items-center gap-2 font-display text-2xl tracking-[2px]">
-          <PencilIcon className="h-5 w-5 text-neon" />
-          Edit Event
+      <Modal open={showEdit} onClose={() => setShowEdit(false)} sheet>
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 font-display text-2xl tracking-[2px]">
+            <PencilIcon className="h-5 w-5 text-neon" />
+            Edit Event
+          </div>
+          <button
+            aria-label="Close"
+            onClick={() => setShowEdit(false)}
+            className="shrink-0 rounded-lg px-2 py-1 text-xl leading-none text-muted transition-colors hover:text-foreground"
+          >
+            ✕
+          </button>
         </div>
         <p className="mb-4 text-xs text-muted">{ev.name} · Code {ev.code}</p>
 
@@ -576,7 +585,7 @@ export default function EventSetupPanel({
               onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
             />
           </div>
-          <div className="flex gap-[10px]">
+          <div className="flex flex-col gap-[10px] sm:flex-row">
             <div className="flex flex-1 flex-col gap-[5px]">
               <label className={labelCls}>Date</label>
               <input
@@ -702,7 +711,7 @@ export default function EventSetupPanel({
           <div className="font-display text-base tracking-[1.5px] text-neon">
             🔐 Access Credentials
           </div>
-          <div className="flex gap-[10px]">
+          <div className="flex flex-col gap-[10px] sm:flex-row">
             <div className="flex flex-1 flex-col gap-[5px]">
               <label className={labelCls}>Guest PIN (4 digits)</label>
               <div className="flex gap-1.5">
@@ -776,7 +785,7 @@ export default function EventSetupPanel({
           This removes the event, its QR code, and any linked data. This action
           cannot be undone.
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <button
             onClick={() => setShowDelete(false)}
             className="flex-1 rounded-[10px] border border-edge bg-surface-2 px-4 py-3 text-sm font-bold text-foreground transition hover:border-neon hover:text-neon"
@@ -875,7 +884,7 @@ export default function EventSetupPanel({
           <div className="mt-3 font-display text-3xl tracking-[8px] text-neon">
             {ev.code}
           </div>
-          <div className="mt-4 flex gap-2">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row">
             <button
               onClick={() => copyText(`${appUrl}/join/${ev.code}`, "Guest link")}
               className="flex-1 rounded-lg border border-edge bg-surface-2 px-3 py-2.5 text-xs font-bold text-foreground transition hover:border-neon hover:text-neon"

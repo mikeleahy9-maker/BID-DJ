@@ -242,38 +242,40 @@ export default function EventsManager({
   return (
     <div className="flex flex-col gap-6">
       {/* Owner profile strip */}
-      <section className="flex flex-wrap items-center gap-4 rounded-xl border border-edge bg-surface p-4">
-        <div className="flex h-11 w-11 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-2xl">
-          {owner.avatar.startsWith("http") ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={owner.avatar} alt={owner.name} className="h-full w-full object-cover" />
-          ) : (
-            owner.avatar
-          )}
-        </div>
-        <div className="min-w-0">
-          <div className="font-display text-xl tracking-[1.5px]">{owner.name}</div>
-          {owner.handleUrl ? (
-            <Link
-              href={owner.handleUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block truncate text-[11px] text-neon transition hover:text-neon-2"
-              title={owner.handleUrl}
-            >
-              {owner.handle}
-            </Link>
-          ) : (
-            <div className="truncate text-[11px] text-muted">{owner.handle}</div>
-          )}
+      <section className="flex items-center gap-3 rounded-xl border border-edge bg-surface p-4">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-surface-2 text-2xl">
+            {owner.avatar.startsWith("http") ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={owner.avatar} alt={owner.name} className="h-full w-full object-cover" />
+            ) : (
+              owner.avatar
+            )}
+          </div>
+          <div className="min-w-0">
+            <div className="truncate font-display text-xl tracking-[1.5px]">{owner.name}</div>
+            {owner.handleUrl ? (
+              <Link
+                href={owner.handleUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block truncate text-[11px] text-neon transition hover:text-neon-2"
+                title={owner.handleUrl}
+              >
+                {owner.handle}
+              </Link>
+            ) : (
+              <div className="truncate text-[11px] text-muted">{owner.handle}</div>
+            )}
+          </div>
         </div>
         <Link
           href="/dj/settings"
-          className="ml-auto rounded-lg border border-edge bg-surface-2 px-4 py-2 text-xs font-bold text-foreground transition hover:border-neon hover:text-neon"
+          className="shrink-0 rounded-lg border border-edge bg-surface-2 px-4 py-2 text-xs font-bold text-foreground transition hover:border-neon hover:text-neon"
         >
           ⚙
         </Link>
-</section>
+      </section>
 
       {connectNeeded && (
     <section className="rounded-xl border border-neon/40 bg-neon/5 p-5">
@@ -437,14 +439,18 @@ export default function EventsManager({
 
       {/* ---- Create event modal (matches prototype exactly) ---- */}
       <Modal open={showCreate} onClose={() => setShowCreate(false)} sheet>
-        <button
-          aria-label="Close"
-          onClick={() => setShowCreate(false)}
-          className="absolute right-5 top-4 text-xl text-muted transition-colors hover:text-foreground"
-        >
-          ✕
-        </button>
-        <div className="mb-1.5 font-display text-[30px] tracking-[2px]">Create New Event</div>
+        <div className="mb-1.5 flex items-start justify-between gap-3">
+          <div className="font-display text-[30px] leading-tight tracking-[2px]">
+            Create New Event
+          </div>
+          <button
+            aria-label="Close"
+            onClick={() => setShowCreate(false)}
+            className="-mt-1 shrink-0 rounded-lg px-2 py-1 text-xl leading-none text-muted transition-colors hover:text-foreground"
+          >
+            ✕
+          </button>
+        </div>
         <p className="mb-[22px] text-xs text-muted">
           This event will be locked to your account — only you can manage it
         </p>
@@ -459,7 +465,7 @@ export default function EventsManager({
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </div>
-          <div className="flex gap-[10px]">
+          <div className="flex flex-col gap-[10px] sm:flex-row">
             <div className="flex flex-1 flex-col gap-[5px]">
               <label className={labelCls}>Date</label>
               <input
@@ -578,7 +584,7 @@ export default function EventsManager({
           <div className="font-display text-base tracking-[1.5px] text-neon">
             🔐 Access Credentials
           </div>
-          <div className="flex gap-[10px]">
+          <div className="flex flex-col gap-[10px] sm:flex-row">
             <div className="flex flex-1 flex-col gap-[5px]">
               <label className={labelCls}>Guest PIN (4 digits)</label>
               <div className="flex gap-1.5">
