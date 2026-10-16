@@ -219,6 +219,11 @@ export function GuestBuyModal({
         You are charged once, at purchase. Nothing else is charged at the end of
         the event.
       </div>
+      <div className="mt-3 rounded-lg border border-neon/10 bg-neon/5 px-3 py-2.5 text-[11px] leading-[1.6] text-muted">
+        Any unused credits at the end of the event are automatically donated to
+        the event — they are not refunded to you. Credits are $1.00 each, plus
+        free bonus credits on larger packs.
+      </div>
     </Modal>
   );
 }
