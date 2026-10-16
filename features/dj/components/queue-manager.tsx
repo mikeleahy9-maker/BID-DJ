@@ -438,9 +438,10 @@ export default function QueueManager({
     return (
       <div className="flex flex-col gap-6">
         <section className="rounded-xl border border-edge bg-surface p-8 text-center">
-          <div className="mb-3 text-[36px]" aria-hidden>
-            🎚️
-          </div>
+            <div className="mb-3 flex items-center justify-center" aria-hidden>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/dj-gig.svg" alt="DJ" className="h-14 w-14 shrink-0 object-cover rounded-full" />
+            </div>
           <h2 className="font-display text-xl tracking-[1.5px]">
             No gig is live right now
           </h2>
