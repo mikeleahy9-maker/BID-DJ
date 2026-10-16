@@ -95,6 +95,8 @@ export function DjShell({
   const [previewOpen, setPreviewOpen] = useState(false);
   const { show, toastNode } = useToast();
 
+  const isQueuePage = pathname === "/dj/queue";
+
   const togglePreview = () => setPreviewOpen((prev) => !prev);
 
   const handleSignOut = async () => {
@@ -195,29 +197,33 @@ export function DjShell({
           <span className="ml-auto truncate text-[13px] font-semibold text-muted">
             {activeLabel}
           </span>
-          <button
-            onClick={togglePreview}
-            disabled={!liveEvent}
-            aria-label={previewOpen ? "Back from preview" : "Guest preview"}
-            title={liveEvent ? "See how guests see the queue" : "No live event right now"}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-neon-2 px-2.5 py-1.5 text-[11px] font-semibold text-neon-2 transition hover:bg-neon-2/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {previewOpen ? "← Back" : "👁 Preview"}
-          </button>
+          {pathname === "/dj/queue" && (
+            <button
+              onClick={togglePreview}
+              disabled={!liveEvent}
+              aria-label={previewOpen ? "Back from preview" : "Guest preview"}
+              title={liveEvent ? "See how guests see the queue" : "No live event right now"}
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-neon-2 px-2.5 py-1.5 text-[11px] font-semibold text-neon-2 transition hover:bg-neon-2/10 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {previewOpen ? "← Back" : "👁 Preview"}
+            </button>
+          )}
         </header>
 
         {/* ---- Desktop top bar ---- */}
         <header className="sticky top-0 z-30 hidden h-14 items-center gap-3 border-b border-edge bg-bg/80 px-8 backdrop-blur lg:flex lg:ml-60">
           <h1 className="text-lg font-semibold">{activeLabel}</h1>
           <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={togglePreview}
-              disabled={!liveEvent}
-              title={liveEvent ? "See how guests see the queue" : "No live event right now"}
-              className="rounded-full border border-neon-2 px-3 py-1.5 text-xs font-semibold text-neon-2 transition hover:bg-neon-2/10 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {previewOpen ? "← Back" : "👁 Preview"}
-            </button>
+            {pathname === "/dj/queue" && (
+              <button
+                onClick={togglePreview}
+                disabled={!liveEvent}
+                title={liveEvent ? "See how guests see the queue" : "No live event right now"}
+                className="rounded-full border border-neon-2 px-3 py-1.5 text-xs font-semibold text-neon-2 transition hover:bg-neon-2/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {previewOpen ? "← Back" : "👁 Preview"}
+              </button>
+            )}
             <span className="flex items-center gap-2 rounded-full border border-neon-3 py-1 pl-1 pr-3 text-xs font-semibold text-neon-3">
               <DjAvatar
                 src={avatarUrl}
@@ -289,7 +295,7 @@ export function DjShell({
 
         {/* ---- Main content ---- */}
         <main className="pt-0 lg:ml-60">
-          {liveEvent && previewOpen ? (
+          {isQueuePage && liveEvent && previewOpen ? (
             <>
               <div className="sticky top-14 z-20 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-neon-2 px-3 py-2.5 text-center text-[10px] font-bold tracking-[0.4px] text-white sm:text-xs sm:tracking-[1px]">
                 <span className="min-w-0">👁 GUEST PREVIEW — this is what your crowd sees</span>
