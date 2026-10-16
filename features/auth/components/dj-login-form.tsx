@@ -6,21 +6,29 @@ import { Field, Input } from "@/components/ui/input";
 import { useToast } from "./use-toast";
 import { getSupabaseClient } from "@/lib/supabase/client";
 import ForgotPasswordModal from "./forgot-password-modal";
+import ResendConfirmationModal from "./resend-confirmation-modal";
 
 type DJRole = "owner" | "helper";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 function friendlyAuthError(message: string): string {
   const msg = message.toLowerCase();
   if (msg.includes("invalid login credentials")) {
     return "Incorrect email or password.";
   }
-  if (msg.includes("email not confirmed")) {
-    return "Email not confirmed yet — check your inbox for the verification link.";
-  }
   if (msg.includes("rate limit") || msg.includes("too many requests")) {
     return "Too many attempts. Wait a minute and try again.";
   }
   return "Could not sign in. Please try again.";
+}
+
+function friendlyResendError(message: string): string {
+  const msg = message.toLowerCase();
+  if (msg.includes("rate limit") || msg.includes("too many requests")) {
+    return "Too many requests. Wait a minute and try again.";
+  }
+  return "Could not send the confirmation email. Please try again.";
 }
 
 export default function DJLoginForm() {
@@ -36,6 +44,10 @@ export default function DJLoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [forgotOpen, setForgotOpen] = useState(false);
+  const [resendOpen, setResendOpen] = useState(false);
+  const [resendSent, setResendSent] = useState(false);
+  const [resendSending, setResendSending] = useState(false);
+  const [resendError, setResendError] = useState<string | null>(null);
 
   const activated = searchParams.get("activated") === "1";
 
@@ -92,7 +104,14 @@ export default function DJLoginForm() {
     });
 
     if (signInError) {
-      setError(friendlyAuthError(signInError.message));
+      // An unconfirmed email is recoverable: show a "confirm your email" modal
+      // so the DJ can request a fresh link, instead of a dead-end error.
+      if (signInError.message.toLowerCase().includes("email not confirmed")) {
+        setError(null);
+        openResendModal();
+      } else {
+        setError(friendlyAuthError(signInError.message));
+      }
       setSubmitting(false);
       return;
     }
@@ -124,6 +143,50 @@ export default function DJLoginForm() {
 
   const handleForgotPassword = () => {
     setForgotOpen(true);
+  };
+
+  /** Open the "confirm your email" modal without sending anything yet. */
+  const openResendModal = () => {
+    setResendSent(false);
+    setResendError(null);
+    setResendOpen(true);
+  };
+
+  /**
+   * Send a fresh confirmation email and reflect the result in the modal. Only
+   * runs when the DJ taps the resend button — the modal never sends on its own.
+   */
+  const sendConfirmationEmail = async () => {
+    setResendSent(false);
+    setResendError(null);
+
+    const trimmed = email.trim();
+    if (!EMAIL_RE.test(trimmed)) {
+      setResendError("Please enter a valid email address.");
+      return;
+    }
+
+    setResendSending(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { error: resendError } = await supabase.auth.resend({
+        type: "signup",
+        email: trimmed,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+      if (resendError) {
+        setResendError(friendlyResendError(resendError.message));
+        setResendSending(false);
+        return;
+      }
+      setResendSending(false);
+      setResendSent(true);
+    } catch {
+      setResendError("Could not send the confirmation email. Please try again.");
+      setResendSending(false);
+    }
   };
 
   const roleOpt = (value: DJRole, icon: string, title: string, sub: string) => (
@@ -287,6 +350,16 @@ export default function DJLoginForm() {
       </form>
 
       <ForgotPasswordModal open={forgotOpen} onClose={() => setForgotOpen(false)} />
+      <ResendConfirmationModal
+        open={resendOpen}
+        onClose={() => setResendOpen(false)}
+        email={email}
+        onEmailChange={setEmail}
+        sent={resendSent}
+        sending={resendSending}
+        error={resendError}
+        onSend={sendConfirmationEmail}
+      />
 
       {toastNode}
     </>
