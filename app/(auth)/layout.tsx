@@ -5,6 +5,8 @@
 
 import React from "react";
 
+import { ScrollToTop } from "@/components/scroll-to-top";
+
 export default function AuthLayout({
   children,
 }: {
@@ -12,6 +14,7 @@ export default function AuthLayout({
 }) {
   return (
     <div className="relative mx-auto min-h-screen w-full max-w-[480px] bg-bg">
+      <ScrollToTop />
       {children}
       <div
         aria-hidden

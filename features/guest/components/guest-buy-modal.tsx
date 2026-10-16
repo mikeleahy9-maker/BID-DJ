@@ -148,7 +148,12 @@ export function GuestBuyModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} sheet>
+    <Modal
+      open={open}
+      onClose={onClose}
+      sheet
+      className="max-h-[85vh]! lg:max-h-[92vh]!"
+    >
       <button
         onClick={onClose}
         aria-label="Close"
@@ -210,13 +215,6 @@ export function GuestBuyModal({
         {purchasing ? "PROCESSING…" : `PAY ${selected.price}`}
       </button>
 
-      <div className="mt-3 rounded-lg border border-neon/10 bg-neon/5 px-3 py-2.5 text-[11px] leading-[1.6] text-muted">
-        💡 Any unused credits at the end of the event are automatically donated
-        to the event organizer — they are not refunded to you. Credits are
-        $1.00 each, plus free bonus credits on larger packs. The money collected
-        is split 70% to the organizer, 20% to the DJ/Band and 10% to BidaBeat.
-        DJ tips go 100% to the DJ/Band.
-      </div>
       <div className="mt-2 text-center text-[10px] text-muted">
         You are charged once, at purchase. Nothing else is charged at the end of
         the event.

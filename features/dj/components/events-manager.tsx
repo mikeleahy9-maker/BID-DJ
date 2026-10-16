@@ -438,7 +438,12 @@ export default function EventsManager({
       </div>
 
       {/* ---- Create event modal (matches prototype exactly) ---- */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} sheet>
+      <Modal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        sheet
+        className="max-h-[85vh]! lg:max-h-[92vh]!"
+      >
         <div className="mb-1.5 flex items-start justify-between gap-3">
           <div className="font-display text-[30px] leading-tight tracking-[2px]">
             Create New Event

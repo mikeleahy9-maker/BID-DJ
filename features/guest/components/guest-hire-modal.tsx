@@ -90,7 +90,12 @@ export function GuestHireModal({
 
   return (
     <>
-      <Modal open={open} onClose={onClose} sheet className="md:max-w-lg">
+      <Modal
+        open={open}
+        onClose={onClose}
+        sheet
+        className="max-h-[85vh]! lg:max-h-[92vh]! md:max-w-lg"
+      >
         {/* close */}
         <button
           onClick={onClose}
