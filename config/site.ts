@@ -16,18 +16,30 @@ export const siteConfig = {
   marketing: {
     nav: [
       {
-        title: "Home",
-        href: "/",
+        title: "How It Works",
+        href: "/#how-it-works",
       },
       {
-        title: "Features",
-        href: "/#features",
+        title: "For DJs & Bands",
+        href: "/#for-djs",
       },
       {
-        title: "Pricing",
-        href: "/#pricing",
+        title: "FAQ",
+        href: "/#faq",
       },
     ],
+    footer: {
+      product: [
+        { title: "How It Works", href: "/#how-it-works" },
+        { title: "For DJs & Bands", href: "/#for-djs" },
+        { title: "FAQ", href: "/#faq" },
+      ],
+      legal: [
+        { title: "Terms of Service", href: "/terms" },
+        { title: "Privacy Policy", href: "/privacy" },
+        { title: "Refund Policy", href: "/refund" },
+      ],
+    },
   },
 
   // Guest navigation

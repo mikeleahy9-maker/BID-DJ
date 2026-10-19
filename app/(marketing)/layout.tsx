@@ -1,6 +1,9 @@
 /**
  * Marketing route group layout.
- * Preserves the prototype's mobile-first 480px frame for landing/auth screens.
+ *
+ * Full-width so public marketing pages can breathe on tablet/desktop.
+ * Individual pages own their own inner max-width containers; the legal
+ * pages stay centered with a 360px reading column.
  */
 
 import React from "react";
@@ -11,7 +14,7 @@ export default function MarketingLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative mx-auto min-h-screen w-full max-w-[480px] bg-bg">
+    <div className="relative min-h-screen w-full bg-bg">
       {children}
       <div
         aria-hidden

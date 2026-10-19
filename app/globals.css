@@ -53,6 +53,14 @@
 @layer base {
   html {
     color-scheme: dark;
+    /* Keep anchor targets clear of the sticky marketing header. */
+    scroll-padding-top: 5rem;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
 
   ::selection {
