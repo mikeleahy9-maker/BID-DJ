@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Field, FieldRow, Input } from "@/components/ui/input";
 import { CardSetupForm } from "@/features/payments/card-setup-form";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { getGuestDeepLink } from "@/lib/auth-redirect";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -16,7 +17,7 @@ function validateEmail(value: string): string | null {
     : "Please enter a valid email address (e.g. you@email.com).";
 }
 
-export default function SignupForm() {
+export default function SignupForm({ next }: { next?: string | null }) {
   const router = useRouter();
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -33,9 +34,15 @@ export default function SignupForm() {
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("setup") === "complete") {
-      window.location.replace("/login?signup=success");
+      // Stripe returns here after redirect-based card auth. This is a fresh
+      // component instance, so keep the QR destination in the hand-off to
+      // login instead of dropping the guest on the dashboard.
+      const destination = getGuestDeepLink(next) ?? "/dashboard";
+      window.location.replace(
+        `/login?signup=success&next=${encodeURIComponent(destination)}`
+      );
     }
-  }, []);
+  }, [next]);
 
   const checkEmailExists = async (value: string) => {
     const trimmed = value.trim();
@@ -246,7 +253,9 @@ export default function SignupForm() {
       ) : clientSecret ? (
         <CardSetupForm
           clientSecret={clientSecret}
-          returnUrl={`${window.location.origin}/signup?setup=complete`}
+          returnUrl={`${window.location.origin}/signup?setup=complete&next=${encodeURIComponent(
+            getGuestDeepLink(next) ?? "/dashboard"
+          )}`}
           onSaved={async ({ setupIntentId }) => {
             // Guest accounts are auto-confirmed at signup (email_confirm: true),
             // so we can sign them in immediately — no manual login.
@@ -276,7 +285,7 @@ export default function SignupForm() {
               );
             }
 
-            router.push("/dashboard");
+            router.push(getGuestDeepLink(next) ?? "/dashboard");
             router.refresh();
           }}
           footer="Your card is saved securely via Stripe. You are only charged when you buy credits."

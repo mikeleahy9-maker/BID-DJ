@@ -467,6 +467,7 @@ export function GuestQueuePage({
               tracks={tracks}
               emptyText="No songs on the board yet — request one to kick things off!"
               bidControls={renderBidControls}
+              holdOrderWhileBidding
             />
           </section>
 
@@ -505,7 +506,31 @@ export function GuestQueuePage({
             </div>
           </aside>
         </div>
+
+        {/* Space for the fixed mobile credits bar so the last song is reachable. */}
+        <div className="h-24 md:hidden" aria-hidden />
       </PageContainer>
+
+      {/* Mobile-only pinned credits + Buy button. The page scrolls as one now;
+          this keeps the wallet reachable without scrolling back to the top. */}
+      <div className="fixed inset-x-0 bottom-0 z-40 border-t border-edge bg-surface/95 px-4 pb-[max(0.625rem,env(safe-area-inset-bottom))] pt-2.5 backdrop-blur md:hidden">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[1px] text-muted">
+              Your Credits
+            </div>
+            <div className="font-display text-[24px] leading-none tracking-[1px] text-neon">
+              {available}
+            </div>
+          </div>
+          <button
+            onClick={() => setBuyOpen(true)}
+            className="shrink-0 cursor-pointer rounded-lg border-none bg-neon-2 px-3.5 py-2.5 text-xs font-bold tracking-[0.5px] text-white"
+          >
+            + BUY MORE
+          </button>
+        </div>
+      </div>
 
       {/* Buy Credits */}
       <GuestBuyModal

@@ -58,15 +58,19 @@ export function GuestBuyModal({
   const [purchasing, setPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Reused across retries of the same attempt and sent as Stripe's
-  // idempotency key, so a double-click cannot charge twice.
+  // Stripe's idempotency key for ONE purchase attempt. It stays stable while a
+  // request is in flight (so a double-click cannot charge twice), but must be
+  // replaced when the attempt finishes. Reusing it for the next purchase makes
+  // Stripe replay the previous PaymentIntent: no new charge, no new credits,
+  // but the replay still reports the old "credits granted" value.
   const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const nextAttempt = () => setRequestId(crypto.randomUUID());
 
   const select = (pack: Pack) => {
     setSelected(pack);
     setError(null);
     // A different pack is a different charge, so it needs a fresh key.
-    setRequestId(crypto.randomUUID());
+    nextAttempt();
   };
 
   const confirm = async () => {
@@ -79,10 +83,14 @@ export function GuestBuyModal({
         body: JSON.stringify({ eventId, packId: selected.id, requestId }),
       });
       const body = (await res.json().catch(() => null)) as
-        | { ok?: boolean; creditsGranted?: number; requiresAction?: boolean; clientSecret?: string; error?: string }
+        | { ok?: boolean; creditsGranted?: number; requiresAction?: boolean; clientSecret?: string; cardDeclined?: boolean; error?: string }
         | null;
 
       if (!res.ok) {
+        // A definite decline never charged the card, so the guest can retry
+        // with a fresh key. Ambiguous failures keep the key so a retry replays
+        // the original intent instead of charging the card twice.
+        if (body?.cardDeclined) nextAttempt();
         setError(body?.error ?? "Could not take that payment.");
         return;
       }
@@ -92,6 +100,8 @@ export function GuestBuyModal({
         return;
       }
 
+      // This attempt is complete: the next PAY click must be a new charge.
+      nextAttempt();
       onPurchased(body?.creditsGranted ?? selected.credits);
     } catch {
       setError("Network error — please try again.");
@@ -122,6 +132,8 @@ export function GuestBuyModal({
     });
 
     if (confirmError) {
+      // The bank declined before charging, so a retry needs a fresh key.
+      nextAttempt();
       setError(confirmError.message ?? "Your bank declined the payment.");
       return;
     }
@@ -144,6 +156,8 @@ export function GuestBuyModal({
       return;
     }
 
+    // The 3-D Secure attempt is complete; rotate the key for the next purchase.
+    nextAttempt();
     onPurchased(body.creditsGranted ?? selected.credits);
   };
 

@@ -69,8 +69,11 @@ export function GuestCardGate() {
     router.refresh();
   };
 
-  // SSR-safe: undefined on the server, real origin after hydration.
+  // SSR-safe: undefined on the server, real URL after hydration. Returning to
+  // the current URL keeps a QR guest on `/join/{code}` if Stripe needs a
+  // redirect-based card check.
   const origin = typeof window === "undefined" ? "" : window.location.origin;
+  const returnUrl = typeof window === "undefined" ? undefined : window.location.href;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col px-4 py-10 md:px-6 md:py-16">
@@ -132,7 +135,7 @@ export function GuestCardGate() {
           ) : (
             <CardSetupForm
               clientSecret={clientSecret}
-              returnUrl={origin ? `${origin}/dashboard` : undefined}
+              returnUrl={origin ? returnUrl : undefined}
               elementClassName=""
               onSaved={handleSaved}
               footer="Your card is saved securely via Stripe. You are only charged when you buy credits."

@@ -11,11 +11,13 @@
  */
 
 import React from "react";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import {
   getCurrentUser,
   getSupabaseServerClient,
 } from "@/lib/supabase/server";
+import { getGuestDeepLink } from "@/lib/auth-redirect";
 import { AppHeader } from "@/components/layout/app-header";
 import { GuestHeaderActions } from "@/features/guest/components/guest-header-actions";
 import { GuestCardGate } from "@/features/guest/components/guest-card-gate";
@@ -32,7 +34,12 @@ export const metadata = {
 export default async function GuestLayout({ children }: LayoutProps) {
   const user = await getCurrentUser();
   if (!user) {
-    redirect("/login");
+    // Normally proxy.ts already redirected an anonymous QR visitor with a
+    // `next` query. This is the fallback when the guard is reached directly
+    // (for example, a stale session cookie): keep the event destination.
+    const headerStore = await headers();
+    const next = getGuestDeepLink(headerStore.get("x-bida-next"));
+    redirect(next ? `/login?next=${encodeURIComponent(next)}` : "/login");
   }
 
   const supabase = await getSupabaseServerClient();

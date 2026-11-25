@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Field, Input } from "@/components/ui/input";
 import { useToast } from "./use-toast";
 import { getSupabaseClient } from "@/lib/supabase/client";
+import { getGuestDeepLink } from "@/lib/auth-redirect";
 import ForgotPasswordModal from "./forgot-password-modal";
 
 /**
@@ -34,7 +35,7 @@ function validateEmail(value: string): string | null {
   return EMAIL_RE.test(trimmed) ? null : "Please enter a valid email address (e.g. you@email.com).";
 }
 
-export default function LoginForm() {
+export default function LoginForm({ next }: { next?: string | null }) {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -148,8 +149,13 @@ const supabase = getSupabaseClient();
       return;
     }
 
+    // A QR visitor should land back on the event they scanned for, not on
+    // the generic dashboard. The helper rejects anything but local guest
+    // deep links, so this cannot become an open redirect.
+    const destination = getGuestDeepLink(next) ?? "/dashboard";
+
     show("✓ Logged in! Redirecting…");
-    router.push("/dashboard");
+    router.push(destination);
     router.refresh();
   };
 
